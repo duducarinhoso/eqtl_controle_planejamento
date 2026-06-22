@@ -1,0 +1,20 @@
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+
+# Nunca publicar dados sensíveis ou segredos
+*.xlsx
+*.xls
+seed_data.json
+/usuarios/
+**/usuarios/
+.env
+.env.*
+config.local.js
+
+# Dependências (não usamos, mas por segurança)
+node_modules/
