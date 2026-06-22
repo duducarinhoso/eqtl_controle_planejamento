@@ -368,3 +368,88 @@ export async function importSeed(seed, project, onProgress = () => {}) {
   }
   onProgress("Concluído.");
 }
+
+/* ===================== CARGA INICIAL A PARTIR DO EXCEL ===================== */
+/* Recebe a saida de excel.parseXlsxFull (abas com larguras/alturas/mescla/
+   formatacao) e CRIA as abas + celulas direto, SEM gerar historico (usa a RPC
+   import_cells, igual a carga do seed). Use para a carga inicial de um projeto
+   novo a partir do .xlsx — sem precisar do migrador Python/JSON.
+   `sheets` = subconjunto de parseXlsxFull (so as abas escolhidas). */
+const _STATUS_VOCAB = new Set(["pendente", "recebido", "n/a", "na", "em análise",
+  "em analise", "parcial", "recebido parcial"]);
+const _isStatus = (v) => _STATUS_VOCAB.has(String(v ?? "").trim().toLowerCase());
+const _isNumber = (v) => v != null && v !== "" && /^-?\d/.test(String(v).trim()) && !isNaN(Number(v));
+
+export async function importWorkbook(sheets, project, onProgress = () => {}) {
+  const existing = await listSheets(project);
+  const byName = new Map(existing.map((s) => [s.name, s]));
+  const { data: { user } } = await supabase.auth.getUser();
+  const pid = (project && !project.synthetic && project.id) ? project.id : null;
+
+  // carga inicial NAO gera historico: usa a RPC import_cells se existir
+  let useRpc = true;
+  try { const { error } = await supabase.rpc("import_cells", { p_rows: [] }); if (error) useRpc = false; }
+  catch (_) { useRpc = false; }
+
+  let created = 0, totalCells = 0;
+  for (const sh of sheets) {
+    if (!sh.cells.size && !Object.keys(sh.merges || {}).length) continue;   // aba vazia: ignora
+    onProgress(`Aba "${sh.name}"…`);
+    let sheet = byName.get(sh.name);
+    const meta = {
+      name: sh.name, position: sh.position, hidden: !!sh.hidden, kind: sh.kind || "matrix",
+      row_count: sh.row_count, col_count: sh.col_count,
+      col_widths: sh.col_widths || {}, row_heights: sh.row_heights || {},
+      frozen_rows: 0, frozen_cols: 0,
+    };
+    if (pid) meta.project_id = pid;
+    if (!sheet) {
+      const { data, error } = await supabase.from("sheets").insert({ ...meta, created_by: user?.id }).select().single();
+      if (error) throw error;
+      sheet = data; byName.set(sh.name, sheet); created++;
+    } else {
+      await supabase.from("sheets").update(meta).eq("id", sheet.id);
+    }
+
+    // monta linhas de celula: valor + tipo + formato + mescla/cobertura
+    const rowsMap = new Map();
+    for (const [k, o] of sh.cells) {
+      const [r, c] = k.split(":").map(Number);
+      const dtype = _isStatus(o.value) ? "status" : (_isNumber(o.value) ? "number" : "text");
+      rowsMap.set(k, { sheet_id: sheet.id, row: r, col: c, value: o.value ?? "", data_type: dtype, format: o.format || {}, merge: null, covered_by: null });
+    }
+    for (const [k, span] of Object.entries(sh.merges || {})) {
+      const [r, c] = k.split(":").map(Number);
+      const e = rowsMap.get(k) || { sheet_id: sheet.id, row: r, col: c, value: "", data_type: "text", format: {}, covered_by: null };
+      e.merge = span; rowsMap.set(k, e);
+    }
+    for (const [k, anchor] of Object.entries(sh.covered || {})) {
+      const [r, c] = k.split(":").map(Number);
+      const e = rowsMap.get(k) || { sheet_id: sheet.id, row: r, col: c, value: "", data_type: "text", format: {}, merge: null };
+      e.covered_by = anchor; rowsMap.set(k, e);
+    }
+
+    const rows = [...rowsMap.values()];
+    const B = 500;
+    for (let i = 0; i < rows.length; i += B) {
+      const batch = rows.slice(i, i + B);
+      let error;
+      if (useRpc) ({ error } = await supabase.rpc("import_cells", { p_rows: batch }));
+      else ({ error } = await supabase.from("cells").upsert(batch, { onConflict: "sheet_id,row,col" }));
+      if (error) throw error;
+      onProgress(`Aba "${sh.name}": ${Math.min(i + B, rows.length)}/${rows.length} células`);
+    }
+    totalCells += rows.length;
+
+    // notas/comentarios (so se a aba ainda nao tiver)
+    if (sh.comments?.length) {
+      const { count } = await supabase.from("comments").select("*", { count: "exact", head: true }).eq("sheet_id", sheet.id);
+      if (!count) {
+        const cm = sh.comments.map((c) => ({ sheet_id: sheet.id, row: c.row, col: c.col, author_name: c.author || null, body: c.body }));
+        for (let i = 0; i < cm.length; i += B) await supabase.from("comments").insert(cm.slice(i, i + B));
+      }
+    }
+  }
+  onProgress("Concluído.");
+  return { created, totalCells };
+}

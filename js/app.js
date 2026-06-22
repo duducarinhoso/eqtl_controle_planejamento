@@ -1003,9 +1003,9 @@ function openUserMenu(e) {
   item("Trocar minha foto…", changeMyPhoto);
   item("Equipe / usuários…", openTeamPanel);
   m.appendChild(h("div", { class: "sep" }));
-  item("Atualizar a partir do Excel…", openExcelImport);
+  item("Importar / atualizar do Excel (.xlsx)…", openExcelImport);
   item("Exportar planilha inteira (.xlsx)", exportWorkbook);
-  item("Importar seed inicial (.json)…", openImport);
+  item("Importar seed (.json) — avançado…", openImport);
   m.appendChild(h("div", { class: "sep" }));
   item("Sair", () => supabase.auth.signOut(), true);
   document.body.appendChild(m);
@@ -1151,27 +1151,44 @@ function openExcelImport() {
     try { parsed = await excel.parseXlsxFull(file); }   // ExcelJS: traz valores + formatação
     catch (e) { loading.close(); return toast("Não consegui ler o Excel: " + e.message, "err"); }
     const byName = new Map(App.sheets.map((s) => [s.name.trim(), s]));
-    const results = []; const unmatched = [];
+    const results = []; const novas = [];
     for (const ps of parsed) {
       const sheet = byName.get(ps.name.trim());
-      if (!sheet) { if (ps.cells.size) unmatched.push(ps.name); continue; }
+      if (!sheet) { if (ps.cells.size) novas.push(ps); continue; }   // aba nova -> carga inicial
       const cur = await store.loadCells(sheet.id);
       const valMap = new Map([...ps.cells].map(([k, o]) => [k, o.value]));
       const changes = computeSheetDiff(cur, valMap);
       if (changes.length) results.push({ sheet, changes, curMap: new Map(cur.map((c) => [c.row + ":" + c.col, c])), fmtMap: ps.cells });
     }
     loading.close();
-    if (!results.length) return toast(unmatched.length ? "Nenhuma alteração nas abas correspondentes." : "Nada para atualizar.");
-    showDiffModal(results, unmatched);
+    if (!results.length && !novas.length) return toast("Nada para importar ou atualizar.");
+    showDiffModal(results, novas);
   };
   input.click();
 }
 
-function showDiffModal(results, unmatched) {
+function showDiffModal(results, novas = []) {
   const total = results.reduce((n, r) => n + r.changes.length, 0);
+  const onlyCarga = novas.length && !results.length;
   const body = h("div", { class: "scrollbody" });
-  if (unmatched.length) body.appendChild(h("p", { class: "muted", style: { fontSize: "12px" } },
-    "Abas no arquivo sem aba correspondente (ignoradas): " + unmatched.join(", ")));
+
+  // ---- secao: abas novas (CARGA INICIAL, sem historico) ----
+  const novaChecks = [];
+  if (novas.length) {
+    const sec = h("div", { class: "diff-sheet" });
+    sec.appendChild(h("div", { class: "dh2" },
+      h("strong", {}, novas.length === 1 ? "1 aba nova (carga, sem histórico)" : `${novas.length} abas novas (carga, sem histórico)`)));
+    novas.forEach((ps) => {
+      const cb = h("input", { type: "checkbox" }); cb.checked = true;
+      novaChecks.push({ ps, input: cb });
+      sec.appendChild(h("div", { class: "diff-row" }, cb,
+        h("span", { class: "ref" }, "nova"),
+        h("span", { class: "new", style: { flex: "1" } }, ps.name),
+        h("span", { class: "count" }, ps.cells.size + " células")));
+    });
+    body.appendChild(sec);
+  }
+
   const checks = [];
   results.forEach((res) => {
     const adds = res.changes.filter((c) => c.kind === "add").length;
@@ -1201,8 +1218,12 @@ function showDiffModal(results, unmatched) {
   const apply = h("button", { class: "btn btn-primary" }, "Aplicar selecionadas");
   const foot = h("div", { class: "modal-foot" },
     h("button", { class: "btn btn-ghost", onClick: () => scrim.remove() }, "Cancelar"), apply);
-  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Atualizar a partir do Excel"),
-    h("p", { class: "muted", style: { margin: "0 0 10px" } }, `O arquivo traz ${total} alteração(ões) em ${results.length} aba(s). Nada muda até você confirmar.`),
+  const parts = [];
+  if (novas.length) parts.push(`${novas.length} aba(s) nova(s) (carga inicial, sem histórico)`);
+  if (results.length) parts.push(`${total} alteração(ões) em ${results.length} aba(s) existente(s)`);
+  const modal = h("div", { class: "modal wide" },
+    h("h3", {}, onlyCarga ? "Carga inicial a partir do Excel" : "Importar / atualizar a partir do Excel"),
+    h("p", { class: "muted", style: { margin: "0 0 10px" } }, `O arquivo traz ${parts.join(" e ")}. Nada muda até você confirmar.`),
     body, foot);
   scrim.appendChild(modal);
   scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) scrim.remove(); });
@@ -1210,9 +1231,23 @@ function showDiffModal(results, unmatched) {
 
   apply.onclick = async () => {
     const sel = checks.filter((x) => x.input.checked);
-    if (!sel.length) return scrim.remove();
+    const selNovas = novaChecks.filter((x) => x.input.checked).map((x) => x.ps);
+    if (!sel.length && !selNovas.length) return scrim.remove();
     apply.disabled = true; apply.textContent = "Aplicando…";
     const touched = new Set();
+
+    // 1) abas novas: carga inicial (cria abas + células SEM histórico)
+    if (selNovas.length) {
+      apply.textContent = "Carregando abas…";
+      try { await store.importWorkbook(selNovas, App.project, (msg) => { apply.textContent = msg; }); }
+      catch (e) {
+        toast("Erro na carga das abas novas: " + e.message, "err");
+        apply.disabled = false; apply.textContent = "Aplicar selecionadas"; return;
+      }
+    }
+
+    // 2) abas existentes: alterações (geram histórico)
+    apply.textContent = "Aplicando…";
     for (const x of sel) {
       const ex = x.curMap.get(x.ch.row + ":" + x.ch.col);
       const imp = x.fmtMap && x.fmtMap.get(x.ch.row + ":" + x.ch.col);
@@ -1222,8 +1257,16 @@ function showDiffModal(results, unmatched) {
       touched.add(x.sheet.id);
     }
     scrim.remove();
-    toast(`${sel.length} célula(s) atualizada(s).`);
+
+    const msgs = [];
+    if (selNovas.length) msgs.push(`${selNovas.length} aba(s) carregada(s)`);
+    if (sel.length) msgs.push(`${sel.length} célula(s) atualizada(s)`);
+    toast(msgs.join(" · ") || "Concluído.");
     touched.forEach((id) => bumpActivity(id));
+    if (selNovas.length) {
+      await refreshSheets();
+      if (!App.sheet) { const first = App.sheets.find((s) => !s.hidden) || App.sheets[0]; if (first) selectSheet(first); }
+    }
     if (App.sheet && touched.has(App.sheet.id)) await reloadCurrent();
   };
 }

@@ -46,27 +46,96 @@ export async function parseXlsxFile(file) {
   return out;
 }
 
-/* Le um .xlsx COM formatação (ExcelJS) -> [{ name, cells: Map("r:c" -> {value, format}) }].
-   Captura fonte/cor/preenchimento/borda/alinhamento/numfmt e resolve cores de tema. */
+/* Le um .xlsx COM formatação (ExcelJS) -> por aba:
+   { name, position, hidden, kind, row_count, col_count, col_widths, row_heights,
+     merges, covered, cells: Map("r:c" -> {value, format}), comments }.
+   Captura fonte/cor/preenchimento/borda/alinhamento/numfmt (cores de tema),
+   mais larguras/alturas reais, mescla de celulas e notas — o suficiente para
+   a CARGA INICIAL de um projeto direto do Excel (sem passar por Python/JSON). */
 export async function parseXlsxFull(file) {
   const ExcelJS = await getExcelJS();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
   const palette = buildThemePalette(wb);
   const out = [];
+  let pos = 0;
   wb.eachSheet((ws) => {
     const cells = new Map();
+    const comments = [];
+    let maxR = 1, maxC = 1;
     ws.eachRow({ includeEmpty: false }, (row, r) => {
       row.eachCell({ includeEmpty: false }, (cell, c) => {
         const value = cellText(cell);
         const format = extractFormat(cell, palette);
-        if ((value != null && value !== "") || Object.keys(format).length)
+        if ((value != null && value !== "") || Object.keys(format).length) {
           cells.set(r + ":" + c, { value, format });
+          if (r > maxR) maxR = r;
+          if (c > maxC) maxC = c;
+        }
+        const note = noteText(cell);
+        if (note) comments.push({ row: r, col: c, author: "", body: note });
       });
     });
-    out.push({ name: ws.name, cells });
+
+    // ---- mescla de celulas (ancora -> span; demais -> covered_by) ----
+    const merges = {}, covered = {};
+    let ranges = [];
+    try { ranges = (ws.model && ws.model.merges) || []; } catch (_) { ranges = []; }
+    for (const rg of ranges) {
+      const parts = String(rg).split(":");
+      const pa = refToRC(parts[0]), pb = refToRC(parts[1] || parts[0]);
+      if (!pa || !pb) continue;
+      merges[pa.r + ":" + pa.c] = { rowspan: pb.r - pa.r + 1, colspan: pb.c - pa.c + 1 };
+      for (let r = pa.r; r <= pb.r; r++)
+        for (let c = pa.c; c <= pb.c; c++)
+          if (r !== pa.r || c !== pa.c) covered[r + ":" + c] = pa.r + ":" + pa.c;
+      if (pb.r > maxR) maxR = pb.r;
+      if (pb.c > maxC) maxC = pb.c;
+    }
+
+    // ---- larguras / alturas reais (mesma conversao do migrador Python) ----
+    const defW = (ws.properties && ws.properties.defaultColWidth) || 8.43;
+    const col_widths = {};
+    for (let c = 1; c <= maxC; c++) {
+      const col = ws.getColumn(c);
+      const w = (col && typeof col.width === "number") ? col.width : defW;
+      col_widths[String(c)] = Math.round(w * 7) + 5;        // chars -> px
+    }
+    const row_heights = {};
+    ws.eachRow({ includeEmpty: false }, (row, r) => {
+      if (typeof row.height === "number" && row.height > 0)
+        row_heights[String(r)] = Math.max(18, Math.round(row.height * 4 / 3));  // pts -> px
+    });
+
+    const nm = ws.name.trim().toLowerCase();
+    const kind = ["solicitações", "solicitacoes", "status wkt"].includes(nm) ? "index" : "matrix";
+    out.push({
+      name: ws.name, position: pos++,
+      hidden: ws.state ? ws.state !== "visible" : false,
+      kind, row_count: Math.max(maxR + 20, 60), col_count: Math.max(maxC + 4, 12),
+      col_widths, row_heights, merges, covered, cells, comments,
+    });
   });
   return out;
+}
+
+/* "B12" -> {r:12, c:2} (ignora cifroes de referencia absoluta) */
+function refToRC(ref) {
+  const m = /^([A-Z]+)(\d+)$/.exec(String(ref).replace(/\$/g, "").toUpperCase());
+  if (!m) return null;
+  let c = 0;
+  for (const ch of m[1]) c = c * 26 + (ch.charCodeAt(0) - 64);
+  return { r: parseInt(m[2], 10), c };
+}
+
+/* texto de uma nota/comentario de celula (ExcelJS expoe cell.note) */
+function noteText(cell) {
+  const n = cell && cell.note;
+  if (!n) return "";
+  if (typeof n === "string") return n.trim();
+  if (Array.isArray(n.texts)) return n.texts.map((t) => (t && t.text) || "").join("").trim();
+  if (typeof n.text === "string") return n.text.trim();
+  return "";
 }
 
 function cellText(cell) {
