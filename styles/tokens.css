@@ -1,0 +1,107 @@
+/* =====================================================================
+   Design System: "Command Center Navy" (v1_blue_gold)
+   Tokens espelhados de design_system/v1_blue_gold/DESIGN.md
+   ===================================================================== */
+:root {
+  /* ---- Superficies (Layered White) ---- */
+  --surface: #f9f9ff;
+  --surface-dim: #d9dae0;
+  --surface-bright: #f9f9ff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f2f3fa;
+  --surface-container: #ededf4;
+  --surface-container-high: #e7e8ee;
+  --surface-container-highest: #e1e2e9;
+  --on-surface: #191c20;
+  --on-surface-variant: #424751;
+  --inverse-surface: #2e3036;
+  --inverse-on-surface: #f0f0f7;
+  --outline: #727782;
+  --outline-variant: #c2c6d3;
+
+  /* canvas de trabalho (mint-grey citado no DESIGN.md) */
+  --workspace-bg: #f4f7f6;
+
+  /* ---- Marca / acoes ---- */
+  --surface-tint: #1a5fa8;
+  --primary: #004786;
+  --on-primary: #ffffff;
+  --primary-container: #1a5fa8;
+  --on-primary-container: #c4daff;
+  --inverse-primary: #a6c8ff;
+  --secondary: #4f6072;
+  --on-secondary: #ffffff;
+  --secondary-container: #d2e4f9;
+  --on-secondary-container: #556678;
+  --tertiary: #713700;
+  --tertiary-container: #944a00;
+
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --error-container: #ffdad6;
+  --on-error-container: #93000a;
+
+  --background: #f9f9ff;
+  --on-background: #191c20;
+  --surface-variant: #e1e2e9;
+
+  /* ---- Sidebar (Navy Scale) ---- */
+  --navy-900: #0d1f33;      /* fundo estrutural da sidebar */
+  --navy-800: #112840;
+  --navy-700: #163652;
+  --navy-300: #6699b4;
+  --navy-100: #d4e8f4;
+  --gold: #d4af37;          /* acento metalico do modulo ativo */
+  --gold-dim: #b8932e;
+
+  /* ---- Sidebar: paleta "Navy Blue" da imagem de referencia ---- */
+  --side-bg1: #0c1f41;      /* topo do gradiente (Eerie/Oxford navy) */
+  --side-bg2: #0b2249;      /* base (#0B2249) */
+  --side-line: #133c6f;     /* divisorias / hover (#133C6F) */
+  --side-accent: #5985bd;   /* acento claro / ativo (#5985BD) */
+  --side-accent-2: #2c5c93; /* acento medio (#2C5C93) */
+  --side-text: #dbe6f6;     /* texto principal claro */
+  --side-muted: #5985bd;    /* rotulos/secundario */
+
+  /* ---- Status semaforico ---- */
+  --status-blue: #2563eb;
+  --status-green: #16a34a;
+  --status-yellow: #d97706;
+  --status-orange: #ea580c;
+  --status-red: #dc2626;
+  --status-purple: #7c3aed;
+
+  /* mapeamento semantico de status do dominio */
+  --st-recebido: var(--status-green);
+  --st-pendente: var(--status-yellow);
+  --st-na: var(--secondary);
+  --st-analise: var(--status-blue);
+  --st-parcial: var(--status-orange);
+
+  /* ---- Tipografia ---- */
+  --font-brand: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ---- Raios ---- */
+  --r-sm: 0.25rem;
+  --r: 0.5rem;
+  --r-md: 0.75rem;
+  --r-lg: 1rem;
+  --r-xl: 1.5rem;
+  --r-full: 9999px;
+
+  /* ---- Espacamento ---- */
+  --sp: 4px;
+  --gutter: 28px;
+  --grid-gap: 16px;
+  --card-pad: 20px;
+  --sidebar-w: 240px;
+  --topbar-h: 56px;
+
+  /* ---- Elevacao (sombras tingidas no texto, baixa opacidade) ---- */
+  --shadow-xs: 0 1px 2px rgba(13, 26, 42, 0.06);
+  --shadow-sm: 0 2px 6px rgba(13, 26, 42, 0.08);
+  --shadow-lg: 0 16px 40px rgba(13, 26, 42, 0.22);
+
+  --border-w: 1.5px;
+}
