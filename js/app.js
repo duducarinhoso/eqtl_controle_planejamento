@@ -4,7 +4,7 @@ import * as store from "./store.js";
 import { Grid } from "./grid.js";
 import * as rt from "./realtime.js";
 import * as excel from "./excel.js";
-import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, statusClass, STATUS_OPTIONS } from "./util.js";
+import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor } from "./util.js";
 
 const BG_COLORS = ["", "#fff3cd", "#d4edbc", "#cfe2ff", "#f8d7da", "#e2d9f3", "#ffe5d0", "#d9dae0", "#0d1f33"];
 const TX_COLORS = ["#191c20", "#004786", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#ffffff", "#727782"];
@@ -77,6 +77,7 @@ async function ensureProfile() {
   catch (e) { toast("Erro ao carregar perfil: " + e.message, "err"); return false; }
   if (!App.profile) { showAuth("login"); return false; }
   App.profilesMap = await store.getProfilesMap();
+  await reloadStatusOptions();
   if (!App._presenceStarted) { App._presenceStarted = true; startPresence(); }
   return true;
 }
@@ -121,6 +122,13 @@ function userChipEl() {
 }
 
 function isAdmin() { return !!(App.profile && App.profile.role === "adm"); }
+
+/* carrega a lista de status do banco (status_options). Degrada para a lista
+   padrao embutida se a tabela ainda nao existir (sql/15_status_options.sql). */
+async function reloadStatusOptions() {
+  try { const opts = await store.loadStatusOptions(); if (opts.length) setStatusOptions(opts); }
+  catch (_) { /* tabela ainda nao criada: mantem o padrao */ }
+}
 
 /* avatar: foto se houver, senão iniciais */
 function avatarEl(u, size = 30) {
@@ -300,7 +308,7 @@ function projectCard(p) {
   const sum = (App._summary && (App._summary.get(p.id) || (p.synthetic && App._summary.get("__all__")))) || new Map();
   const chips = h("div", { class: "pc-status" });
   const seen = new Set();
-  STATUS_OPTIONS.forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(h("span", { class: "chip " + (statusClass(s) || "na") }, `${s} · ${n}`)); seen.add(s); } });
+  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(h("span", { class: "chip " + (statusClassFor(s) || "na") }, `${s} · ${n}`)); seen.add(s); } });
   for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(h("span", { class: "chip na" }, `${k} · ${n}`));
   if (!chips.childNodes.length) chips.appendChild(h("span", { class: "muted", style: { fontSize: "11px" } }, "Sem status preenchidos"));
   return h("div", { class: "proj-card", onClick: () => goProject(p.id) },
@@ -373,6 +381,7 @@ function goToCell(pid, sid, r, c) {
 
 async function mountProject(project) {
   App.project = project;
+  App.sheetFilter = "";
   $("#auth-root").hidden = true;
   const root = $("#app-root"); root.hidden = false;
   clear(root);
@@ -418,15 +427,25 @@ function buildShell() {
       h("div", { class: "brand-proj", id: "brand-proj" }, App.project ? App.project.name : "")),
     h("div", { class: "side-nav" },
       h("button", { class: "side-nav-item nav-others", onClick: goProjects }, "↩ Outros projetos"),
-      h("button", { class: "side-nav-item nav-dash", id: "nav-dashboard", onClick: () => goProject(App.project.id) }, "▦ Dashboard")),
+      h("button", { class: "side-nav-item nav-dash", id: "nav-dashboard", onClick: () => goProject(App.project.id) },
+        h("span", { class: "nav-ic", html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.6"/><rect x="13" y="10" width="8" height="11" rx="1.6"/><rect x="3" y="13" width="8" height="8" rx="1.6"/></svg>' }),
+        h("span", {}, "Dashboard")),
+      h("button", { class: "side-nav-item nav-search", onClick: openGlobalSearch },
+        h("span", { class: "nav-ic" }, "🔎"), h("span", {}, "Busca geral"))),
     h("div", { class: "side-actions" },
       h("div", { class: "side-icons" },
-        h("button", { class: "side-icon-btn", title: "Importar / atualizar a partir de um Excel (.xlsx)", onClick: openExcelImport }, "⇪ Importar Excel"),
+        isAdmin() ? h("button", { class: "side-icon-btn", title: "Importar / atualizar a partir de um Excel (.xlsx)", onClick: openExcelImport }, "⇪ Importar Excel") : null,
         h("button", { class: "side-icon-btn", id: "btn-export", title: "Exportar abas para Excel (.xlsx)", onClick: enterExportMode }, "⭳ Exportar")),
       h("div", { class: "exp-bar", id: "exp-bar", hidden: true })),
-    h("div", { class: "side-section" }, h("span", {}, "Abas"),
+    h("div", { class: "side-section" },
+      h("span", { class: "side-section-t" }, "Abas"),
+      h("input", { class: "side-search", type: "search", placeholder: "Buscar…", value: App.sheetFilter || "",
+        oninput: (e) => { App.sheetFilter = e.target.value; renderSidebar(); } }),
       h("button", { class: "add", title: "Nova aba", onClick: newSheet }, "+")),
     sheetList,
+    h("div", { class: "side-foot" },
+      h("button", { class: "side-foot-btn", title: "Configuração", onClick: openConfig },
+        h("span", { class: "nav-ic" }, "⚙"), h("span", {}, "Configuração"))),
   );
 
   // ---- Topbar ----
@@ -569,11 +588,43 @@ function syncToolbar(fmt) {
 
 /* ============================ SIDEBAR ============================ */
 async function refreshSheets() {
-  const [sheets, activity] = await Promise.all([store.listSheets(App.project), store.loadSheetActivity(App.project)]);
-  App.sheets = sheets;
+  const sheets = await store.listSheets(App.project);
+  const [activity, index] = await Promise.all([
+    store.loadSheetActivity(App.project),
+    store.loadSheetIndex(App.project, sheets),
+  ]);
+  App.sheets = sortedSheets(sheets);
   App.activity = activity;
+  App.sheetIndex = index || new Map();
   renderSidebar();
 }
+
+/* ordenacao natural das abas: indices primeiro, depois 1.1, 1.2 … 1.10, 1.11.
+   Apenas para EXIBICAO (nao regrava posicoes no banco). */
+function natCompare(a, b) {
+  const ax = String(a ?? "").trim().match(/\d+|\D+/g) || [];
+  const bx = String(b ?? "").trim().match(/\d+|\D+/g) || [];
+  const n = Math.max(ax.length, bx.length);
+  for (let i = 0; i < n; i++) {
+    const x = ax[i], y = bx[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (/^\d/.test(x) && /^\d/.test(y)) { const d = parseInt(x, 10) - parseInt(y, 10); if (d) return d; }
+    else { const d = x.localeCompare(y, "pt"); if (d) return d; }
+  }
+  return 0;
+}
+function sortedSheets(sheets) {
+  const idx = sheets.filter((s) => s.kind === "index").sort((a, b) => (a.position - b.position) || natCompare(a.name, b.name));
+  const rest = sheets.filter((s) => s.kind !== "index").sort((a, b) => natCompare(a.name, b.name));
+  return [...idx, ...rest];
+}
+/* info do indice (Área/Scot/Client Portal) para uma aba, se houver */
+function sheetInfo(s) {
+  if (!App.sheetIndex || !s) return null;
+  return App.sheetIndex.get(String(s.name || "").trim()) || null;
+}
+function sheetAreaText(s) { const i = sheetInfo(s); return i && i.areas.length ? i.areas.join(" · ") : ""; }
 
 function bumpActivity(sheetId) {
   const iso = new Date().toISOString();
@@ -585,23 +636,38 @@ function bumpActivity(sheetId) {
 function renderSidebar() {
   const list = $("#sheet-list"); if (!list) return;
   clear(list);
-  App.sheets.forEach((s, i) => {
+  const inExp = App.exportMode;
+  const q = (App.sheetFilter || "").trim().toLowerCase();
+  let sheets = App.sheets;
+  if (q && !inExp) {
+    sheets = App.sheets.filter((s) => {
+      const info = sheetInfo(s);
+      const hay = (s.name + " " + sheetAreaText(s) + " " + (info ? info.scot + " " + info.clientPortal : "")).toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (!sheets.length) {
+    list.appendChild(h("div", { class: "sheet-empty" }, q ? "Nenhuma aba encontrada." : "Nenhuma aba."));
+    return;
+  }
+  sheets.forEach((s) => {
     const t = App.activity.get(s.id);
-    const inExp = App.exportMode;
     const checked = inExp && App.exportSel.has(s.id);
+    const area = sheetAreaText(s);
+    const tip = s.name + (area ? " · " + area : "") + (t ? "\nAlterado: " + fmtDate(t) : "");
     const item = h("div", {
       class: "sheet-item" + (!inExp && App.sheet && s.id === App.sheet.id ? " active" : "") + (s.hidden ? " is-hidden" : ""),
+      title: tip,
       onClick: () => {
         if (inExp) { App.exportSel.has(s.id) ? App.exportSel.delete(s.id) : App.exportSel.add(s.id); renderSidebar(); updateExpBar(); }
         else goSheet(App.project.id, s.id);
       },
       oncontextmenu: (e) => { if (inExp) return; e.preventDefault(); sheetMenu(e.clientX, e.clientY, s); },
     },
-      inExp ? h("input", { type: "checkbox", class: "exp-check", checked: checked })
-            : h("span", { class: "idx" }, String(i + 1).padStart(2, "0")),
+      inExp ? h("input", { type: "checkbox", class: "exp-check", checked: checked }) : null,
       h("div", { class: "col" },
-        h("span", { class: "nm", title: s.name }, s.name),
-        h("span", { class: "meta-time", id: "time-" + s.id }, t ? "alt. " + fmtDate(t) : "")),
+        h("span", { class: "nm" }, s.name),
+        area ? h("span", { class: "sub-name" }, area) : null),
       s.kind === "index" && !inExp ? h("span", { class: "badge" }, "índice") : null,
       !inExp ? h("button", { class: "row-menu", title: "Opções", onClick: (e) => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); sheetMenu(r.left, r.bottom, s); } }, "⋯") : null,
     );
@@ -615,9 +681,6 @@ function sheetMenu(x, y, s) {
   const item = (label, fn, danger) => m.appendChild(h("button", { class: danger ? "danger" : "", onClick: () => { m.remove(); fn(); } }, label));
   item("Renomear…", () => renameSheet(s));
   item(s.hidden ? "Reexibir aba" : "Ocultar aba", async () => { await store.updateSheet(s.id, { hidden: !s.hidden }); await refreshSheets(); });
-  const idx = App.sheets.findIndex((x) => x.id === s.id);
-  if (idx > 0) item("Mover para cima", () => moveSheet(s, -1));
-  if (idx < App.sheets.length - 1) item("Mover para baixo", () => moveSheet(s, +1));
   m.appendChild(h("div", { class: "sep" }));
   item("Excluir aba", () => confirmDelete(s), true);
   document.body.appendChild(m);
@@ -646,7 +709,7 @@ async function renameSheet(s) {
   if (!name || name === s.name) return;
   await store.updateSheet(s.id, { name });
   await refreshSheets();
-  if (App.sheet?.id === s.id) $("#crumb").textContent = name;
+  if (App.sheet?.id === s.id) { App.sheet.name = name; renderCrumb(App.sheet); }
 }
 async function confirmDelete(s) {
   if (!(await confirmModal("Excluir aba", `Excluir a aba "${s.name}" e todo o seu conteúdo? Esta ação não pode ser desfeita.`))) return;
@@ -662,8 +725,8 @@ function showEmptyState() {
   clear(gs);
   gs.appendChild(h("div", { style: { padding: "60px", textAlign: "center", color: "var(--on-surface-variant)" } },
     h("div", { class: "t-headline-sm" }, "Nenhuma aba ainda"),
-    h("p", {}, "Crie uma aba no menu lateral ou importe a planilha existente."),
-    h("button", { class: "btn btn-primary", onClick: openImport }, "Importar planilha")));
+    h("p", {}, isAdmin() ? "Crie uma aba no menu lateral ou importe a planilha existente." : "Crie uma aba no menu lateral."),
+    isAdmin() ? h("button", { class: "btn btn-primary", onClick: openImport }, "Importar planilha") : null));
 }
 
 /* ============================ DASHBOARD ============================ */
@@ -676,7 +739,7 @@ async function showDashboard() {
   renderAppPresence();
   updateCellPresence();
   $("#nav-dashboard")?.classList.add("active");
-  $("#crumb").textContent = "Dashboard";
+  { const cr = $("#crumb"); if (cr) { clear(cr); cr.appendChild(h("span", { class: "crumb-name" }, "Dashboard")); } }
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "none";
   rt.unsubscribeDB(); rt.leavePresence();
   const gs = $("#grid-scroll");
@@ -710,7 +773,7 @@ async function renderDashStatus(body, gs) {
     const a = agg.get(label); a.total++; grand++;
     a.sheets.set(r.sheet_id, (a.sheets.get(r.sheet_id) || 0) + 1);
   }
-  const order = [...STATUS_OPTIONS];
+  const order = [...getStatusOptions()];
   for (const k of agg.keys()) if (!order.includes(k)) order.push(k);
 
   clear(body);
@@ -718,7 +781,7 @@ async function renderDashStatus(body, gs) {
   const gridEl = h("div", { class: "kpi-grid" });
   for (const label of order) {
     const a = agg.get(label); if (!a) continue;
-    const cls = statusClass(label) || "na";
+    const cls = statusClassFor(label) || "na";
     const card = h("div", { class: "kpi-card" });
     const sheetsBox = h("div", { class: "kpi-sheets" });
     [...a.sheets.entries()].sort((x, y) => y[1] - x[1]).forEach(([sid, cnt]) => {
@@ -758,7 +821,7 @@ const STATUS_RAMP = {
   parcial:  ["#FAECE7", "#F5C4B3", "#F0997B", "#4A1B0C"],
   na:       ["#F1EFE8", "#D3D1C7", "#B4B2A9", "#2C2C2A"],
 };
-function rampFor(label) { return STATUS_RAMP[statusClass(label) || "na"] || STATUS_RAMP.na; }
+function rampFor(label) { return STATUS_RAMP[statusClassFor(label) || "na"] || STATUS_RAMP.na; }
 function heatTd(v, ramp, max) {
   const cell = h("div", { class: "hcell" }, v ? String(v) : "·");
   if (v) { const ratio = v / (max || 1); const i = ratio <= 0.34 ? 0 : ratio <= 0.67 ? 1 : 2; cell.style.background = ramp[i]; cell.style.color = ramp[3]; }
@@ -803,7 +866,7 @@ async function renderDashUsers(body) {
   const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   const users = userIds.map((id) => { const p = App.profilesMap.get(id) || {}; return { id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, color: p.color, avatar_url: p.avatar_url }; });
   users.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  const statuses = [...STATUS_OPTIONS];
+  const statuses = [...getStatusOptions()];
   for (const r of rows) { const l = normStatusLabel(r.status); if (l && !statuses.includes(l)) statuses.push(l); }
 
   const count = {}; const perDay = {}; const daySet = new Set(); let total = 0;
@@ -856,7 +919,7 @@ function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, col
     const tb = h("tbody", {});
     statuses.forEach((st) => {
       const ramp = rampFor(st);
-      const tr = h("tr", {}, h("td", { class: "rh" }, h("span", { class: "chip " + (statusClass(st) || "na") }, st)));
+      const tr = h("tr", {}, h("td", { class: "rh" }, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st)));
       users.forEach((u) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, ramp, mmax)));
       tr.appendChild(h("td", { class: "tot" }, String(colByStatus(st))));
       tb.appendChild(tr);
@@ -868,7 +931,7 @@ function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, col
     table.appendChild(h("tfoot", {}, tf));
   } else {
     const head = h("tr", {}, h("th", { class: "rh" }, "Pessoa"));
-    statuses.forEach((st) => head.appendChild(h("th", {}, h("span", { class: "chip " + (statusClass(st) || "na") }, st))));
+    statuses.forEach((st) => head.appendChild(h("th", {}, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st))));
     head.appendChild(h("th", {}, "Total"));
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
@@ -923,7 +986,7 @@ async function selectSheet(sheet) {
   $("#nav-dashboard")?.classList.remove("active");
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "";
   renderSidebar();
-  $("#crumb").textContent = sheet.name;
+  renderCrumb(sheet);
   const gs = $("#grid-scroll");
   gs.classList.remove("dash");
   if (!App.grid) App.grid = new Grid(gs, actions);
@@ -958,7 +1021,7 @@ async function selectSheet(sheet) {
         App.sheet = p.new; App.grid.sheet = p.new;
         if (structural) reconcile();
         else if (dimChanged) App.grid.render();
-        $("#crumb").textContent = p.new.name;
+        renderCrumb(p.new);
         updateSheetInfo();
       }
     },
@@ -989,6 +1052,23 @@ function updateSheetInfo() {
   const el = $("#sheet-info");
   if (el && App.sheet) el.textContent = `${App.sheet.row_count} linhas · ${App.sheet.col_count} colunas`;
 }
+
+/* topbar: nome da aba + Área / Scot / Client Portal (vindos da aba índice) */
+function renderCrumb(sheet) {
+  const el = $("#crumb"); if (!el) return;
+  clear(el);
+  if (!sheet) { el.textContent = "—"; return; }
+  el.appendChild(h("span", { class: "crumb-name" }, sheet.name));
+  const info = sheetInfo(sheet);
+  if (info) {
+    const chips = h("div", { class: "crumb-info" });
+    const add = (label, val) => { if (val) chips.appendChild(h("span", { class: "ci", title: label + ": " + val }, h("b", {}, label + ": "), val)); };
+    add("Área", info.areas.join(" · "));
+    add("Scot", info.scot);
+    add("Client Portal", info.clientPortal);
+    if (chips.childNodes.length) el.appendChild(chips);
+  }
+}
 function setRtStatus(on, label) {
   const el = $("#rt-status"); if (!el) return;
   el.classList.toggle("off", !on);
@@ -1006,12 +1086,18 @@ function renderAppPresence() {
   const users = new Map();
   for (const [id, p] of App.profilesMap) users.set(id, { id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, email: p.email, color: p.color, avatar_url: p.avatar_url });
   for (const [id, p] of online) if (!users.has(id)) users.set(id, { id, name: p.name, full_name: p.full_name, email: p.email, color: p.color });
-  const list = [...users.values()].map((u) => { const on = online.get(u.id); return { ...u, online: !!on, loc: on ? on.loc : null }; });
-  list.sort((a, b) => (b.online - a.online) || String(a.name).localeCompare(String(b.name)));
+  const all = [...users.values()].map((u) => { const on = online.get(u.id); return { ...u, online: !!on, loc: on ? on.loc : null }; });
+  // SO os online viram avatar no topbar (com bolinha verde); offline vira só um contador cinza.
+  const onlineUsers = all.filter((u) => u.online).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const offlineCount = all.length - onlineUsers.length;
   const MAX = 9;
-  list.slice(0, MAX).forEach((u) => box.appendChild(presAvatar(u)));
-  if (list.length > MAX) box.appendChild(h("div", { class: "pav", onClick: openTeamPanel, title: "Ver todos" },
-    h("div", { class: "pav-circle", style: { background: "var(--secondary)" } }, "+" + (list.length - MAX))));
+  onlineUsers.slice(0, MAX).forEach((u) => box.appendChild(presAvatar(u)));
+  if (onlineUsers.length > MAX) box.appendChild(h("div", { class: "pav", onClick: openTeamPanel, title: "Ver todos online" },
+    h("div", { class: "pav-circle", style: { background: "var(--secondary)" } }, "+" + (onlineUsers.length - MAX)),
+    h("div", { class: "pav-name" }, "online")));
+  if (offlineCount > 0) box.appendChild(h("div", { class: "pav off", onClick: openTeamPanel, title: `${offlineCount} offline · ver equipe` },
+    h("div", { class: "pav-circle", style: { background: "var(--outline)" } }, String(offlineCount)),
+    h("div", { class: "pav-name" }, "offline")));
 }
 function presAvatar(u) {
   const self = u.id === App.profile.id;
@@ -1191,10 +1277,13 @@ function openUserMenu(e) {
   item("Editar nome de exibição…", editDisplayName);
   item("Trocar minha foto…", changeMyPhoto);
   item("Equipe / usuários…", openTeamPanel);
+  if (isAdmin()) {
+    m.appendChild(h("div", { class: "sep" }));
+    item("Importar / atualizar do Excel (.xlsx)…", openExcelImport);
+    item("Importar seed (.json) — avançado…", openImport);
+  }
   m.appendChild(h("div", { class: "sep" }));
-  item("Importar / atualizar do Excel (.xlsx)…", openExcelImport);
   item("Exportar planilha inteira (.xlsx)", exportWorkbook);
-  item("Importar seed (.json) — avançado…", openImport);
   m.appendChild(h("div", { class: "sep" }));
   item("Sair", () => supabase.auth.signOut(), true);
   document.body.appendChild(m);
@@ -1274,10 +1363,11 @@ function enterExportMode() {
   renderSidebar();
   const bar = $("#exp-bar"); bar.hidden = false; clear(bar);
   bar.appendChild(h("div", { class: "exp-hint" }, "Marque as abas a exportar:"));
+  bar.appendChild(h("label", { class: "exp-all" },
+    h("input", { type: "checkbox", id: "exp-all", checked: true, onChange: toggleAllExport }),
+    h("span", {}, "Todas as abas")));
   bar.appendChild(h("button", { class: "btn btn-primary btn-sm", id: "exp-confirm", style: { width: "100%" }, onClick: confirmExport }, "Confirmar exportação"));
-  bar.appendChild(h("div", { style: { display: "flex", gap: "6px" } },
-    h("button", { class: "btn btn-ghost btn-sm", style: { flex: "1", color: "var(--navy-100)", borderColor: "#ffffff33" }, onClick: toggleAllExport }, "Todas"),
-    h("button", { class: "btn btn-ghost btn-sm", style: { flex: "1", color: "var(--navy-100)", borderColor: "#ffffff33" }, onClick: exitExportMode }, "Cancelar")));
+  bar.appendChild(h("button", { class: "btn btn-ghost btn-sm", style: { width: "100%", color: "var(--navy-100)", borderColor: "#ffffff33" }, onClick: exitExportMode }, "Cancelar"));
   updateExpBar();
 }
 function toggleAllExport() {
@@ -1285,7 +1375,11 @@ function toggleAllExport() {
   App.exportSel = allSel ? new Set() : new Set(App.sheets.map((s) => s.id));
   renderSidebar(); updateExpBar();
 }
-function updateExpBar() { const c = $("#exp-confirm"); if (c) c.textContent = `Confirmar exportação (${App.exportSel.size})`; }
+function updateExpBar() {
+  const c = $("#exp-confirm"); if (c) c.textContent = `Confirmar exportação (${App.exportSel.size})`;
+  const a = $("#exp-all");
+  if (a) { const n = App.exportSel.size, t = App.sheets.length; a.checked = n === t; a.indeterminate = n > 0 && n < t; }
+}
 function exitExportMode() {
   App.exportMode = false; App.exportSel = null;
   const bar = $("#exp-bar"); if (bar) { bar.hidden = true; clear(bar); }
@@ -1502,6 +1596,257 @@ function openDrawer(title, bodyEl) {
   scrim.addEventListener("mousedown", () => { drawer.remove(); scrim.remove(); });
   document.body.appendChild(scrim);
   document.body.appendChild(drawer);
+}
+
+/* ============================ BUSCA GERAL (todas as abas) ============================ */
+function closeDrawer() {
+  document.querySelector(".drawer")?.remove();
+  document.querySelector(".drawer-scrim")?.remove();
+}
+/* trecho com o termo realçado (e truncado em volta do 1º match, p/ células longas) */
+function gsSnippet(value, term) {
+  const s = String(value ?? "");
+  const tl = term.toLowerCase();
+  const idx = s.toLowerCase().indexOf(tl);
+  let str = s, pre = "", post = "";
+  if (s.length > 140 && idx >= 0) {
+    const start = Math.max(0, idx - 40), end = Math.min(s.length, idx + term.length + 80);
+    str = s.slice(start, end);
+    if (start > 0) pre = "…";
+    if (end < s.length) post = "…";
+  }
+  const low = str.toLowerCase();
+  let out = "", i = 0;
+  while (true) {
+    const j = low.indexOf(tl, i);
+    if (j < 0) { out += escapeHtml(str.slice(i)); break; }
+    out += escapeHtml(str.slice(i, j)) + "<mark>" + escapeHtml(str.slice(j, j + term.length)) + "</mark>";
+    i = j + term.length;
+  }
+  return pre + out + post;
+}
+function openGlobalSearch() {
+  const input = h("input", { class: "input", type: "search", placeholder: "Buscar texto em todas as abas…" });
+  const info = h("div", { class: "muted", style: { fontSize: "12px", margin: "2px 0 10px" } }, "Digite ao menos 2 caracteres.");
+  const results = h("div", { class: "gsearch-results" });
+  const body = h("div", { class: "db" }, h("div", { class: "field", style: { marginBottom: "6px" } }, input), info, results);
+  const run = debounce(async () => {
+    const term = input.value.trim();
+    clear(results);
+    if (term.length < 2) { info.textContent = "Digite ao menos 2 caracteres."; return; }
+    info.textContent = "Buscando…";
+    let rows;
+    try { rows = await store.searchCells(term, App.sheets.map((s) => s.id)); }
+    catch (e) { info.textContent = "Erro na busca: " + e.message; return; }
+    if (input.value.trim() !== term) return;   // o usuário continuou digitando: descarta resultado antigo
+    const byId = new Map(App.sheets.map((s) => [String(s.id), s]));
+    const groups = new Map();
+    for (const r of rows) {
+      const sid = String(r.sheet_id);
+      if (!byId.has(sid)) continue;
+      if (!groups.has(sid)) groups.set(sid, []);
+      groups.get(sid).push(r);
+    }
+    if (!groups.size) { info.textContent = `Nada encontrado para “${term}”.`; return; }
+    const total = [...groups.values()].reduce((n, a) => n + a.length, 0);
+    info.textContent = `${total} resultado(s) em ${groups.size} aba(s).`;
+    const sids = [...groups.keys()].sort((a, b) => natCompare(byId.get(a).name, byId.get(b).name));
+    for (const sid of sids) {
+      const s = byId.get(sid);
+      const matches = groups.get(sid).sort((a, b) => a.row - b.row || a.col - b.col);
+      const area = sheetAreaText(s);
+      const sec = h("div", { class: "gs-group" });
+      sec.appendChild(h("div", { class: "gs-group-h" },
+        h("span", { class: "gs-sheet" }, s.name),
+        area ? h("span", { class: "gs-area" }, area) : null,
+        h("span", { class: "gs-count" }, String(matches.length))));
+      matches.slice(0, 60).forEach((r) => {
+        sec.appendChild(h("div", { class: "gs-row", title: "Ir para " + colName(r.col) + r.row,
+          onClick: () => { closeDrawer(); goToCell(App.project.id, sid, r.row, r.col); } },
+          h("span", { class: "gs-ref" }, colName(r.col) + r.row),
+          h("span", { class: "gs-snippet", html: gsSnippet(r.value, term) })));
+      });
+      if (matches.length > 60) sec.appendChild(h("div", { class: "muted", style: { fontSize: "11px", padding: "4px 10px" } }, `+${matches.length - 60} mais nesta aba`));
+      results.appendChild(sec);
+    }
+  }, 220);
+  input.addEventListener("input", run);
+  openDrawer("Busca geral", body);
+  setTimeout(() => input.focus(), 60);
+}
+
+/* ============================ CONFIGURAÇÃO / GERENCIAR LISTA ============================ */
+function openConfig() {
+  const body = h("div", { class: "db" });
+  body.appendChild(h("p", { class: "muted", style: { fontSize: "12px", margin: "0 0 12px" } }, "Ajustes da planilha compartilhada (valem para todos)."));
+  body.appendChild(h("div", { class: "cfg-item", onClick: () => { closeDrawer(); openListManager(); } },
+    h("div", { class: "cfg-ic" }, "≣"),
+    h("div", {}, h("div", { class: "cfg-t" }, "Gerenciar lista"),
+      h("div", { class: "cfg-d" }, "Editar os itens do dropdown de status e converter textos das células em itens da lista."))));
+  openDrawer("Configuração", body);
+}
+
+const STATUS_COLORS = [["recebido", "Verde"], ["pendente", "Amarelo"], ["analise", "Azul"], ["parcial", "Laranja"], ["na", "Cinza"]];
+function colorSelect(val) {
+  const sel = h("select", { class: "input lm-color" }, ...STATUS_COLORS.map(([k, l]) => h("option", { value: k }, l)));
+  sel.value = val || "na";
+  return sel;
+}
+/* re-renderiza a tela atual para refletir mudanças na lista (cores/itens) */
+function refreshActiveView() {
+  if (App.view === "dashboard") showDashboard();
+  else if (App.sheet && App.grid) App.grid.render();
+}
+
+async function openListManager() {
+  let opts = [], missing = false;
+  try { opts = await store.loadStatusOptions(); }
+  catch (_) { missing = true; }
+
+  const scrim = h("div", { class: "scrim" });
+  const close = () => scrim.remove();
+  const body = h("div", { class: "scrollbody" });
+
+  if (missing) {
+    body.appendChild(h("div", { class: "lm-warn" },
+      h("strong", {}, "Tabela ainda não criada."),
+      h("p", { class: "muted", style: { margin: "8px 0 0" } },
+        "Para a lista ficar compartilhada, rode o arquivo "), h("code", {}, "sql/15_status_options.sql"),
+      h("span", { class: "muted" }, " no Supabase (SQL Editor). Até lá o app usa a lista padrão e o gerenciamento fica indisponível.")));
+  } else {
+    // ----- editor de itens -----
+    const listBox = h("div", { class: "lm-list" });
+    const itemRow = (o) => {
+      const chip = h("span", { class: "chip " + (o.klass || "na") }, o.label);
+      const label = h("input", { class: "input lm-label", value: o.label });
+      const color = colorSelect(o.klass);
+      const save = h("button", { class: "btn btn-sm", onClick: async () => {
+        const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
+        try {
+          const saved = await store.upsertStatusOption({ id: o.id, label: nl, klass: color.value, position: o.position });
+          Object.assign(o, saved); chip.textContent = saved.label; chip.className = "chip " + (saved.klass || "na");
+          await reloadStatusOptions(); refreshActiveView(); toast("Item salvo.");
+        } catch (e) { toast("Erro ao salvar: " + (e.message || e), "err"); }
+      } }, "Salvar");
+      const del = h("button", { class: "btn btn-ghost btn-sm", title: "Remover item", onClick: async () => {
+        if (!(await confirmModal("Remover item", `Remover "${o.label}" da lista? As células que já usam esse valor continuam como estão.`))) return;
+        try { await store.deleteStatusOption(o.id); opts = opts.filter((x) => x.id !== o.id); renderItems(); await reloadStatusOptions(); refreshActiveView(); }
+        catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
+      } }, "✕");
+      return h("div", { class: "lm-row" }, chip, label, color, save, del);
+    };
+    const renderItems = () => {
+      clear(listBox);
+      if (!opts.length) listBox.appendChild(h("p", { class: "muted" }, "Nenhum item. Adicione abaixo."));
+      opts.forEach((o) => listBox.appendChild(itemRow(o)));
+    };
+    renderItems();
+    const addBtn = h("button", { class: "btn btn-primary btn-sm", onClick: async () => {
+      try { const saved = await store.upsertStatusOption({ label: "Novo item", klass: "na", position: opts.length + 1 }); opts.push(saved); renderItems(); await reloadStatusOptions(); }
+      catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
+    } }, "＋ Adicionar item");
+    body.appendChild(h("div", { class: "lm-card" },
+      h("h4", {}, "Itens da lista"),
+      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nome e cor de cada item do dropdown de status. Vale para toda a planilha."),
+      listBox, h("div", { style: { marginTop: "10px" } }, addBtn)));
+
+    // ----- conversor (substituir) -----
+    body.appendChild(buildConverter(opts));
+  }
+
+  const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
+  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Gerenciar lista"), body, foot);
+  scrim.appendChild(modal);
+  scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
+  document.body.appendChild(scrim);
+}
+
+function buildConverter(opts) {
+  const card = h("div", { class: "lm-card" });
+  const findInput = h("input", { class: "input", placeholder: "Texto exato a procurar (ex.: NA)" });
+  const targetSel = h("select", { class: "input" }, ...opts.map((o) => h("option", { value: o.label }, o.label)));
+  const findBtn = h("button", { class: "btn", onClick: () => doFind() }, "Procurar");
+  const previewBox = h("div", { class: "lm-preview" });
+  const applyBtn = h("button", { class: "btn btn-primary", disabled: true, onClick: () => doApply() }, "Substituir selecionadas");
+  const allCb = h("input", { type: "checkbox", checked: true });
+  const allRow = h("label", { class: "lm-allrow", hidden: true }, allCb, h("span", {}, "Marcar / desmarcar todas"));
+  let checks = [];
+  const leftStr = (rec) => { const v = rec && rec.value != null ? String(rec.value) : ""; return v === "" ? "·" : v; };
+
+  async function doFind() {
+    const text = findInput.value;   // EXATO (sem trim)
+    clear(previewBox); checks = []; applyBtn.disabled = true; allRow.hidden = true;
+    if (!text) { previewBox.appendChild(h("p", { class: "muted" }, "Digite o texto exato a procurar.")); return; }
+    previewBox.appendChild(h("div", { class: "spinner", style: { margin: "20px auto" } }));
+    let rows;
+    try { rows = await store.searchCellsExact(text, App.sheets.map((s) => s.id)); }
+    catch (e) { clear(previewBox); previewBox.appendChild(h("p", { class: "muted" }, "Erro na busca: " + e.message)); return; }
+    const byId = new Map(App.sheets.map((s) => [String(s.id), s]));
+    const groups = new Map();
+    for (const r of rows) { const sid = String(r.sheet_id); if (!byId.has(sid)) continue; if (!groups.has(sid)) groups.set(sid, []); groups.get(sid).push(r); }
+    clear(previewBox);
+    if (!groups.size) { previewBox.appendChild(h("p", { class: "muted" }, `Nenhuma célula com exatamente “${text}”.`)); return; }
+    const total = [...groups.values()].reduce((n, a) => n + a.length, 0);
+    allRow.hidden = false;
+    previewBox.appendChild(h("div", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } },
+      `${total} célula(s) em ${groups.size} aba(s). Confira a posição (coluna à esquerda e à direita) antes de aplicar.`));
+    const sids = [...groups.keys()].sort((a, b) => natCompare(byId.get(a).name, byId.get(b).name));
+    for (const sid of sids) {
+      const s = byId.get(sid);
+      const matches = groups.get(sid).sort((a, b) => a.row - b.row || a.col - b.col);
+      let cmap;
+      try { const cells = await store.loadCells(sid); cmap = new Map(cells.map((c) => [c.row + ":" + c.col, c])); }
+      catch (_) { cmap = new Map(); }
+      const sec = h("div", { class: "lm-pv-group" });
+      sec.appendChild(h("div", { class: "lm-pv-h" }, h("span", { class: "gs-sheet" }, s.name),
+        sheetAreaText(s) ? h("span", { class: "gs-area" }, sheetAreaText(s)) : null,
+        h("span", { class: "gs-count" }, String(matches.length))));
+      matches.forEach((m) => {
+        const cb = h("input", { type: "checkbox", checked: true });
+        checks.push({ sid, row: m.row, col: m.col, cb, fmt: (cmap.get(m.row + ":" + m.col) || {}).format || {} });
+        sec.appendChild(h("div", { class: "lm-pv-row" }, cb,
+          h("span", { class: "lm-ref" }, colName(m.col) + m.row),
+          h("span", { class: "lm-side", title: "coluna à esquerda" }, leftStr(cmap.get(m.row + ":" + (m.col - 1)))),
+          h("span", { class: "lm-mid" }, m.value),
+          h("span", { class: "lm-side", title: "coluna à direita" }, leftStr(cmap.get(m.row + ":" + (m.col + 1))))));
+      });
+      previewBox.appendChild(sec);
+    }
+    applyBtn.disabled = false;
+    allCb.checked = true;
+    allCb.onchange = () => { checks.forEach((x) => { x.cb.checked = allCb.checked; }); };
+  }
+
+  async function doApply() {
+    const target = targetSel.value;
+    if (!target) return toast("Crie ao menos um item na lista.");
+    const sel = checks.filter((x) => x.cb.checked);
+    if (!sel.length) return toast("Selecione ao menos uma célula.");
+    if (!(await confirmModal("Confirmar substituição", `Trocar ${sel.length} célula(s) por “${target}” e transformar em lista (dropdown)? Gera histórico e pode ser desfeito célula a célula.`))) return;
+    applyBtn.disabled = true; applyBtn.textContent = "Aplicando…";
+    let n = 0; const touched = new Set();
+    for (const x of sel) {
+      try { await store.saveCell(x.sid, x.row, x.col, { value: target, data_type: "status", format: x.fmt }); n++; touched.add(x.sid); }
+      catch (_) {}
+    }
+    touched.forEach((id) => bumpActivity(id));
+    toast(`${n} célula(s) substituída(s).`);
+    applyBtn.textContent = "Substituir selecionadas";
+    if (App.sheet && touched.has(String(App.sheet.id))) await reloadCurrent();
+    doFind();   // o texto antigo já não existe: atualiza o preview
+  }
+
+  card.appendChild(h("h4", {}, "Converter texto em item da lista"));
+  card.appendChild(h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } },
+    "Procura em TODAS as abas as células com o texto exato (diferencia maiúscula/minúscula, acento e pontuação) e troca pelo item escolhido, virando célula de lista (dropdown)."));
+  card.appendChild(h("div", { class: "lm-conv-ctrls" },
+    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Texto na célula"), findInput),
+    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Vira o item"), targetSel),
+    findBtn));
+  card.appendChild(allRow);
+  card.appendChild(previewBox);
+  card.appendChild(h("div", { class: "lm-apply" }, applyBtn));
+  return card;
 }
 
 /* ============================ GO ============================ */

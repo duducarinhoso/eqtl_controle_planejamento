@@ -64,9 +64,25 @@ export function statusClass(v) {
   return "";
 }
 
-/* opcoes oferecidas no dropdown das colunas de status
-   (mapeadas a partir dos valores reais encontrados na planilha) */
+/* opcoes oferecidas no dropdown das colunas de status — PADRAO embutido.
+   Em runtime, a lista vem da tabela status_options (ver setStatusOptions). */
 export const STATUS_OPTIONS = ["Pendente", "Recebido", "Em análise", "Parcial", "N/A"];
+
+/* lista ATIVA (rotulos) e mapa rotulo->classe-de-cor, alimentados pelo banco.
+   Comecam com o padrao embutido e sao substituidos apos loadStatusOptions(). */
+let _statusOptions = [...STATUS_OPTIONS];
+let _statusClassMap = new Map();
+export function getStatusOptions() { return _statusOptions; }
+export function setStatusOptions(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  _statusOptions = list.map((o) => o.label);
+  _statusClassMap = new Map(list.map((o) => [o.label, o.klass || statusClass(o.label) || "na"]));
+}
+/* classe de cor do chip: usa o mapa do banco e cai no statusClass por palavra-chave */
+export function statusClassFor(label) {
+  if (_statusClassMap.has(label)) return _statusClassMap.get(label);
+  return statusClass(label);
+}
 
 /* cor estavel a partir de uma string (fallback p/ avatar) */
 export function colorFromString(str) {

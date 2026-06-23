@@ -228,6 +228,53 @@ export async function reorderSheets(orderedIds) {
   await Promise.all(orderedIds.map((id, i) => supabase.from("sheets").update({ position: i }).eq("id", id)));
 }
 
+/* mapa: nome-da-aba (trim) -> { areas:[], scot, clientPortal } montado a partir
+   da aba indice "Solicitacoes". Alimenta o subtitulo das abas no sidebar e as
+   infos do topbar. Degrada para Map vazio se nao houver indice. */
+export async function loadSheetIndex(project, sheets = null) {
+  try {
+    const all = sheets || await listSheets(project);
+    const idxSheets = all.filter((s) => s.kind === "index");
+    const target = idxSheets.find((s) => /solicita/i.test(s.name)) || idxSheets[0];
+    if (!target) return new Map();
+    const cells = await loadCells(target.id);
+    if (!cells.length) return new Map();
+    const norm = (v) => String(v ?? "").trim().toLowerCase();
+    const byRC = new Map();
+    let maxRow = 0;
+    for (const c of cells) { byRC.set(c.row + ":" + c.col, c.value); if (c.row > maxRow) maxRow = c.row; }
+    // acha a linha de cabecalho (a que tem "Sheet" + "Área") e as colunas
+    let headerRow = 0, areaCol = 0, scotCol = 0, cpCol = 0, sheetCol = 0;
+    for (let r = 1; r <= Math.min(maxRow, 40); r++) {
+      let a = 0, sc = 0, cp = 0, sh = 0;
+      for (const c of cells) {
+        if (c.row !== r) continue;
+        const n = norm(c.value);
+        if (n === "sheet") sh = c.col;
+        else if (n === "área" || n === "area") a = c.col;
+        else if (n === "scot") sc = c.col;
+        else if (n.startsWith("client")) cp = c.col;
+      }
+      if (sh && a) { headerRow = r; areaCol = a; scotCol = sc; cpCol = cp; sheetCol = sh; break; }
+    }
+    if (!headerRow) return new Map();
+    const map = new Map();
+    for (let r = headerRow + 1; r <= maxRow; r++) {
+      const key = String(byRC.get(r + ":" + sheetCol) ?? "").trim();
+      if (!key) continue;
+      const area = String(byRC.get(r + ":" + areaCol) ?? "").trim();
+      const scot = scotCol ? String(byRC.get(r + ":" + scotCol) ?? "").trim() : "";
+      const cp = cpCol ? String(byRC.get(r + ":" + cpCol) ?? "").trim() : "";
+      if (!map.has(key)) map.set(key, { areas: [], scot: "", clientPortal: "" });
+      const e = map.get(key);
+      if (area && !e.areas.includes(area)) e.areas.push(area);
+      if (!e.scot && scot) e.scot = scot;
+      if (!e.clientPortal && cp) e.clientPortal = cp;
+    }
+    return map;
+  } catch (_) { return new Map(); }
+}
+
 /* ===================== CELULAS ===================== */
 export async function loadCells(sheetId) {
   // pagina para nao truncar abas grandes (limite default do PostgREST = 1000)
@@ -252,6 +299,45 @@ export async function saveCell(sheetId, row, col, patch) {
 
 export async function deleteCell(sheetId, row, col) {
   await supabase.from("cells").delete().match({ sheet_id: sheetId, row, col });
+}
+
+/* busca textual em todas as celulas das abas informadas (Busca geral).
+   sheetIds = ids das abas do projeto atual (escopo). Retorna ate `limit` matches. */
+export async function searchCells(term, sheetIds = null, limit = 400) {
+  const esc = String(term).replace(/[%_\\]/g, "\\$&");   // trata %, _ e \ como literais
+  let q = supabase.from("cells").select("sheet_id,row,col,value").ilike("value", `%${esc}%`).limit(limit);
+  if (sheetIds && sheetIds.length) q = q.in("sheet_id", sheetIds);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+/* busca EXATA (==) usada pelo "Converter texto em item da lista". Diferencia
+   maiuscula/minuscula, acento e pontuacao. */
+export async function searchCellsExact(value, sheetIds = null, limit = 5000) {
+  let q = supabase.from("cells").select("sheet_id,row,col,value").eq("value", value).limit(limit);
+  if (sheetIds && sheetIds.length) q = q.in("sheet_id", sheetIds);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+/* ===================== LISTA DE STATUS (configuravel) ===================== */
+/* Itens do dropdown de status, compartilhados (tabela status_options).
+   Lanca erro se a tabela ainda nao existir (rode sql/15_status_options.sql). */
+export async function loadStatusOptions() {
+  const { data, error } = await supabase.from("status_options").select("*").order("position", { ascending: true }).order("label", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+export async function upsertStatusOption(opt) {
+  const { data, error } = await supabase.from("status_options").upsert(opt, { onConflict: "id" }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function deleteStatusOption(id) {
+  const { error } = await supabase.from("status_options").delete().eq("id", id);
+  if (error) throw error;
 }
 
 /* operacoes de linha/coluna (RPC atomica) */

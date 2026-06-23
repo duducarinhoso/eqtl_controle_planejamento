@@ -1,4 +1,4 @@
-import { colName, escapeHtml, statusClass, STATUS_OPTIONS } from "./util.js";
+import { colName, escapeHtml, getStatusOptions, statusClassFor } from "./util.js";
 
 const ROWHEAD_W = 46;
 const DEFAULT_COL_W = 124;
@@ -216,7 +216,7 @@ export class Grid {
 
     let content;
     if (rec && rec.data_type === "status") {
-      const sc = statusClass(val);
+      const sc = statusClassFor(val);
       content = val ? `<span class="chip ${sc}">${escapeHtml(val)}</span>` : "";
       cls.push("status-cell");
     } else {
@@ -249,6 +249,7 @@ export class Grid {
       c1: Math.min(this.sel.c, this.selEnd.c), c2: Math.max(this.sel.c, this.selEnd.c),
     };
   }
+  _rangeArr(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; }
   paintSelection() {
     if (!this.table) return;
     this.table.querySelectorAll("td.cell.sel").forEach((td) => td.classList.remove("sel"));
@@ -262,9 +263,38 @@ export class Grid {
     // destaca cabecalhos de coluna/linha da selecao (estilo Excel)
     for (let c = c1; c <= c2; c++) this.table.querySelector(`.colhead[data-c="${c}"]`)?.classList.add("hl");
     for (let r = r1; r <= r2; r++) this.table.querySelector(`.rowhead[data-r="${r}"]`)?.classList.add("hl");
-    const td = this.tdAt(this.sel.r, this.sel.c);
-    if (td) td.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const sr = this.selRange();
+    const fullCol = sr.r1 === 1 && sr.r2 === this.sheet.row_count;
+    const fullRow = sr.c1 === 1 && sr.c2 === this.sheet.col_count;
+    this.ensureVisible(this.selEnd.r, this.selEnd.c, { vertical: !fullCol, horizontal: !fullRow });
     this.actions.onSelect && this.actions.onSelect(this.sel, this.get(this.sel.r, this.sel.c));
+  }
+
+  /* rola o container ate a celula ficar visivel, RESPEITANDO o cabecalho de
+     coluna (sticky no topo) e o de linha (sticky a esquerda). Sem isto, Home /
+     setas para a esquerda deixavam a coluna A escondida atras do cabecalho de
+     linha. opts permite rolar so num eixo (ex.: ao selecionar uma coluna
+     inteira, nao queremos pular verticalmente ate a ultima linha). */
+  ensureVisible(r, c, opts = {}) {
+    const { horizontal = true, vertical = true } = opts;
+    if (!this.table || !this.box || !this.box.isConnected) return;
+    const td = this.tdAt(r, c);
+    if (!td) return;
+    const box = this.box;
+    const cr = td.getBoundingClientRect();
+    const br = box.getBoundingClientRect();
+    const thead = this.table.querySelector("thead");
+    const headH = thead ? thead.getBoundingClientRect().height : 0;
+    if (horizontal) {
+      const leftEdge = br.left + ROWHEAD_W, rightEdge = br.right;
+      if (cr.left < leftEdge) box.scrollLeft -= (leftEdge - cr.left);
+      else if (cr.right > rightEdge) box.scrollLeft += (cr.right - rightEdge);
+    }
+    if (vertical) {
+      const topEdge = br.top + headH, bottomEdge = br.bottom;
+      if (cr.top < topEdge) box.scrollTop -= (topEdge - cr.top);
+      else if (cr.bottom > bottomEdge) box.scrollTop += (cr.bottom - bottomEdge);
+    }
   }
 
   selectColumn(c, extend = false) {
@@ -322,6 +352,7 @@ export class Grid {
   }
   select(r, c, extend = false) {
     this.commitEdit();
+    this.closeStatusMenu();
     r = Math.max(1, Math.min(this.sheet.row_count, r));
     c = Math.max(1, Math.min(this.sheet.col_count, c));
     if (!extend) { this.sel = { r, c }; this.selEnd = { r, c }; }
@@ -534,7 +565,7 @@ export class Grid {
   /* ---------------- dropdown de status ---------------- */
   /* opcoes = lista base + quaisquer valores ja usados naquela coluna (status nao mapeado) */
   statusOptionsFor(c) {
-    const out = [...STATUS_OPTIONS];
+    const out = [...getStatusOptions()];
     const seen = new Set(out.map((s) => s.toLowerCase()));
     for (const [, rec] of this.cells) {
       if (rec.col === c && rec.data_type === "status" && rec.value) {
@@ -547,6 +578,7 @@ export class Grid {
 
   openStatusMenu(r, c) {
     const td = this.tdAt(r, c); if (!td) return;
+    this.closeStatusMenu();
     document.querySelector(".ctx-menu")?.remove();
     const rect = td.getBoundingClientRect();
     const menu = document.createElement("div");
@@ -556,18 +588,36 @@ export class Grid {
     menu.style.minWidth = Math.max(150, rect.width) + "px";
     for (const opt of this.statusOptionsFor(c)) {
       const b = document.createElement("button");
-      b.innerHTML = `<span class="chip ${statusClass(opt)}">${opt}</span>`;
-      b.onclick = () => { menu.remove(); this.setValue(r, c, opt); };
+      b.innerHTML = `<span class="chip ${statusClassFor(opt)}">${opt}</span>`;
+      b.onclick = () => { this.closeStatusMenu(); this.setValue(r, c, opt); };
       menu.appendChild(b);
     }
     // opcao para limpar
     const clr = document.createElement("button");
     clr.innerHTML = `<span class="muted" style="font-family:var(--font-ui);font-size:11px">— limpar —</span>`;
-    clr.onclick = () => { menu.remove(); this.setValue(r, c, ""); };
+    clr.onclick = () => { this.closeStatusMenu(); this.setValue(r, c, ""); };
     menu.appendChild(clr);
     document.body.appendChild(menu);
-    const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", close); } };
-    setTimeout(() => document.addEventListener("mousedown", close), 0);
+    this._statusMenu = menu;
+    const close = (e) => { if (!menu.contains(e.target)) this.closeStatusMenu(); };
+    // navegar pelo teclado (setas/Tab/Esc) FECHA a lista — antes ela ficava aberta
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); }
+      this.closeStatusMenu();
+    };
+    this._statusMenuCleanup = () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    setTimeout(() => {
+      document.addEventListener("mousedown", close);
+      document.addEventListener("keydown", onKey, true);
+    }, 0);
+  }
+
+  closeStatusMenu() {
+    if (this._statusMenuCleanup) { this._statusMenuCleanup(); this._statusMenuCleanup = null; }
+    if (this._statusMenu) { this._statusMenu.remove(); this._statusMenu = null; }
   }
 
   /* ---------------- presenca ---------------- */
@@ -671,9 +721,47 @@ export class Grid {
         return;
       }
       const ch = e.target.closest(".colhead");
-      if (ch) { this.selectColumn(+ch.dataset.c, e.shiftKey); return; }
+      if (ch) {
+        e.preventDefault();
+        this.closeStatusMenu();
+        this.selectColumn(+ch.dataset.c, e.shiftKey);   // 1 coluna (ou estende com Shift)
+        const anchorC = this.sel.c;
+        const onMove = (ev) => {                          // arrastar pelos cabecalhos = varias colunas
+          const el = document.elementFromPoint(ev.clientX, ev.clientY);
+          const t2 = el && el.closest ? el.closest(".colhead") : null;
+          if (!t2) return;
+          const cc = +t2.dataset.c;
+          if (cc === this.selEnd.c) return;
+          this.sel = { r: 1, c: anchorC };
+          this.selEnd = { r: this.sheet.row_count, c: cc };
+          this.paintSelection();
+        };
+        const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        return;
+      }
       const rh = e.target.closest(".rowhead");
-      if (rh) { this.selectRow(+rh.dataset.r, e.shiftKey); return; }
+      if (rh) {
+        e.preventDefault();
+        this.closeStatusMenu();
+        this.selectRow(+rh.dataset.r, e.shiftKey);        // 1 linha (ou estende com Shift)
+        const anchorR = this.sel.r;
+        const onMove = (ev) => {                          // arrastar pelos cabecalhos = varias linhas
+          const el = document.elementFromPoint(ev.clientX, ev.clientY);
+          const t2 = el && el.closest ? el.closest(".rowhead") : null;
+          if (!t2) return;
+          const rr = +t2.dataset.r;
+          if (rr === this.selEnd.r) return;
+          this.sel = { r: anchorR, c: 1 };
+          this.selEnd = { r: rr, c: this.sheet.col_count };
+          this.paintSelection();
+        };
+        const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        return;
+      }
     });
     t.addEventListener("dblclick", (e) => {
       const rsz = e.target.closest(".rsz");
@@ -696,9 +784,16 @@ export class Grid {
       const move = (ev) => { const w = Math.max(16, startW + ev.clientX - startX); colEl.style.width = w + "px"; this._tmpW = w; };
       const up = () => {
         document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up);
-        const widths = { ...(this.sheet.col_widths || {}) }; widths[String(c)] = this._tmpW || startW;
+        const w = this._tmpW || startW;
+        // se varias colunas estao selecionadas e a redimensionada e uma delas,
+        // aplica a MESMA largura a todas de uma vez (estilo Excel).
+        const { c1, c2 } = this.selRange();
+        const targets = (c >= c1 && c <= c2 && c2 > c1) ? this._rangeArr(c1, c2) : [c];
+        const widths = { ...(this.sheet.col_widths || {}) };
+        for (const cc of targets) widths[String(cc)] = w;
         this.sheet.col_widths = widths; this.actions.setSheet({ col_widths: widths });
-        this.applySpill();   // recalcula o transbordo de texto com a nova largura
+        if (targets.length > 1) this.render();   // re-renderiza para aplicar a todas
+        else this.applySpill();                  // recalcula o transbordo de texto com a nova largura
       };
       document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
     });
@@ -713,8 +808,14 @@ export class Grid {
       const move = (ev) => { this._tmpH = Math.max(20, Math.round(startH + ev.clientY - startY)); tr.style.height = this._tmpH + "px"; };
       const up = () => {
         document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up);
-        const heights = { ...(this.sheet.row_heights || {}) }; heights[String(r)] = this._tmpH || Math.round(startH);
+        const hh = this._tmpH || Math.round(startH);
+        // varias linhas selecionadas + redimensionou uma delas -> aplica a todas
+        const { r1, r2 } = this.selRange();
+        const targets = (r >= r1 && r <= r2 && r2 > r1) ? this._rangeArr(r1, r2) : [r];
+        const heights = { ...(this.sheet.row_heights || {}) };
+        for (const rr of targets) heights[String(rr)] = hh;
         this.sheet.row_heights = heights; this.actions.setSheet({ row_heights: heights });
+        if (targets.length > 1) this.render();
       };
       document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
     });
@@ -743,7 +844,6 @@ export class Grid {
       const ae = document.activeElement;
       if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
 
-      const { r, c } = this.sel;
       // ----- combos com Ctrl/Cmd -----
       if (e.ctrlKey || e.metaKey) {
         const k = e.key.toLowerCase();
@@ -761,16 +861,20 @@ export class Grid {
         return;
       }
       // ----- teclas simples -----
+      // ao estender com Shift, mover a PONTA da selecao (selEnd), nao a ancora —
+      // antes o Shift+seta sempre recomecava da ancora e so pegava 1 celula.
+      const ext = e.shiftKey;
+      const mv = ext ? this.selEnd : this.sel;
       switch (e.key) {
-        case "ArrowUp": e.preventDefault(); this.select(r - 1, c, e.shiftKey); break;
-        case "ArrowDown": e.preventDefault(); this.select(r + 1, c, e.shiftKey); break;
-        case "ArrowLeft": e.preventDefault(); this.select(r, c - 1, e.shiftKey); break;
-        case "ArrowRight": e.preventDefault(); this.select(r, c + 1, e.shiftKey); break;
-        case "Home": e.preventDefault(); this.select(r, 1, e.shiftKey); break;
-        case "End": e.preventDefault(); this.select(r, this.lastColInRow(r), e.shiftKey); break;
-        case "PageDown": e.preventDefault(); this.select(Math.min(this.sheet.row_count, r + 20), c); break;
-        case "PageUp": e.preventDefault(); this.select(Math.max(1, r - 20), c); break;
-        case "Tab": e.preventDefault(); this.select(r, c + (e.shiftKey ? -1 : 1)); break;
+        case "ArrowUp": e.preventDefault(); this.select(mv.r - 1, mv.c, ext); break;
+        case "ArrowDown": e.preventDefault(); this.select(mv.r + 1, mv.c, ext); break;
+        case "ArrowLeft": e.preventDefault(); this.select(mv.r, mv.c - 1, ext); break;
+        case "ArrowRight": e.preventDefault(); this.select(mv.r, mv.c + 1, ext); break;
+        case "Home": e.preventDefault(); this.select(mv.r, 1, ext); break;
+        case "End": e.preventDefault(); this.select(mv.r, this.lastColInRow(mv.r), ext); break;
+        case "PageDown": e.preventDefault(); this.select(Math.min(this.sheet.row_count, mv.r + 20), mv.c, ext); break;
+        case "PageUp": e.preventDefault(); this.select(Math.max(1, mv.r - 20), mv.c, ext); break;
+        case "Tab": e.preventDefault(); this.select(this.sel.r, this.sel.c + (e.shiftKey ? -1 : 1)); break;
         case "Enter": e.preventDefault(); this.startEdit(); break;
         case "F2": e.preventDefault(); this.startEdit(); break;
         case "Delete": case "Backspace": e.preventDefault(); this.clearSelection(); break;
