@@ -169,6 +169,17 @@ function scoped(q, project) {
   return (project && !project.synthetic && project.id) ? q.eq("project_id", project.id) : q;
 }
 
+/* atividade por usuario (medidor de entregas): mudancas de status agregadas
+   por usuario/status/dia. since = Date ou null (= tudo). Vem da RPC
+   user_status_activity (sql/14_user_metrics.sql). */
+export async function loadUserActivity(project, since = null) {
+  const pid = (project && !project.synthetic && project.id) ? project.id : null;
+  const p_since = since ? new Date(since).toISOString() : null;
+  const { data, error } = await supabase.rpc("user_status_activity", { p_project: pid, p_since });
+  if (error) throw error;
+  return data || [];
+}
+
 /* ultima alteracao REAL por projeto (view project_activity) -> Map(project_id -> iso) */
 export async function loadProjectsLastChange() {
   const m = new Map();

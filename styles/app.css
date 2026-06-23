@@ -145,6 +145,46 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .kpi-card .val { font-size: 30px; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 0; }
 .kpi-card .lbl { font-size: 12px; color: var(--on-surface-variant); }
 .kpi-card .bar { height: 4px; border-radius: 2px; margin-top: 12px; opacity: .85; }
+
+/* ---- Dashboard com abas (Visão por status / Usuários) ---- */
+.dash-tabs { display: flex; gap: 4px; padding: 14px 28px 0; border-bottom: 1.5px solid var(--outline-variant); background: var(--workspace-bg); position: sticky; top: 0; z-index: 2; }
+.dtab { appearance: none; border: 0; background: transparent; padding: 9px 14px; font: inherit; font-size: 14px; font-weight: 700; color: var(--on-surface-variant); border-bottom: 2px solid transparent; cursor: pointer; }
+.dtab.on { color: var(--on-surface); border-bottom-color: var(--gold); }
+.dash-body { padding: 20px 28px 28px; }
+.dash-body h2 { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+.dash-body .sub { color: var(--on-surface-variant); font-size: 13px; margin: 0 0 18px; }
+
+/* ---- aba Usuários: medidor de entregas ---- */
+.dash-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.dash-head h2 { margin: 0; }
+.dash-head .sub { margin: 2px 0 0; }
+.dash-ctrls { display: flex; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1.5px solid var(--outline-variant); border-radius: var(--r); overflow: hidden; background: #fff; }
+.seg-b { appearance: none; border: 0; background: transparent; padding: 7px 12px; font: inherit; font-size: 13px; color: var(--on-surface-variant); cursor: pointer; }
+.seg-b + .seg-b { border-left: 1px solid var(--outline-variant); }
+.seg-b.on { background: var(--primary-container); color: #fff; font-weight: 700; }
+.u-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.u-kpi { background: #fff; border: 1.5px solid var(--outline-variant); border-radius: var(--r-lg); padding: 12px 14px; }
+.u-kpi .l { font-size: 12px; color: var(--on-surface-variant); }
+.u-kpi .v { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; }
+.u-card { background: #fff; border: 1.5px solid var(--outline-variant); border-radius: var(--r-lg); padding: 14px 16px; margin-bottom: 18px; }
+.u-card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.u-card-h h3 { font-size: 16px; font-weight: 800; margin: 0; }
+.u-card-h .sub { font-size: 12px; color: var(--on-surface-variant); }
+.u-tablewrap { overflow-x: auto; }
+.umx { border-collapse: collapse; font-size: 13px; }
+.umx th, .umx td { padding: 4px 8px; text-align: center; }
+.umx th { font-weight: 700; color: var(--on-surface-variant); border-bottom: 1.5px solid var(--outline-variant); white-space: nowrap; vertical-align: bottom; }
+.umx th.rh, .umx td.rh { text-align: left; white-space: nowrap; }
+.umx td.rh { display: flex; align-items: center; gap: 8px; }
+.umx .u-nm { font-weight: 600; }
+.umx .hcell { min-width: 30px; border-radius: 6px; padding: 4px 6px; font-weight: 700; }
+.umx td.tot { font-weight: 800; background: var(--surface-container-low); }
+.umx tfoot td { border-top: 1.5px solid var(--outline-variant); font-weight: 800; }
+
+/* ---- marcador discreto: onde cada usuário online está na aba ---- */
+.grid td.cell { position: relative; }
+.cell-pres { position: absolute; top: 1px; width: 15px; height: 15px; border-radius: 50%; color: #fff; font: 700 9px/15px var(--font-ui); text-align: center; box-shadow: 0 0 0 1.5px #fff; pointer-events: none; z-index: 3; }
 .kpi-sheets { margin-top: 10px; border-top: 1px solid var(--surface-container-high); padding-top: 6px; display: block; max-height: calc(100vh - 320px); overflow-y: auto; }
 .kpi-sheets .srow { display: flex; justify-content: space-between; gap: 8px; padding: 5px 6px; border-radius: var(--r-sm); cursor: pointer; font-size: 12px; }
 .kpi-sheets .srow:hover { background: var(--surface-container-low); }

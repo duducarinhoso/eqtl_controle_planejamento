@@ -139,6 +139,7 @@ export class Grid {
     this._bindTable();
     this.paintSelection();
     this.applySpill();
+    this._decorateCellPresence();
     this.actions.onRender && this.actions.onRender();
   }
 
@@ -588,6 +589,38 @@ export class Grid {
       const flag = document.createElement("div"); flag.className = "peer-flag"; flag.style.setProperty("--peer", info.color);
       const tag = document.createElement("div"); tag.className = "peer-tag"; tag.style.setProperty("--peer", info.color); tag.textContent = info.name;
       td.appendChild(flag); td.appendChild(tag);
+    }
+  }
+
+  /* marcador discreto: onde cada usuario online esta na ABA atual.
+     list: [{ cell:{r,c}, name, color, initials }] (vindo do heartbeat de presenca) */
+  setCellPresence(list) {
+    this._cellPres = list || [];
+    this._decorateCellPresence();
+  }
+  _decorateCellPresence() {
+    if (!this.table) return;
+    this.table.querySelectorAll(".cell-pres").forEach((e) => e.remove());
+    const byCell = new Map();
+    for (const p of (this._cellPres || [])) {
+      if (!p || !p.cell) continue;
+      const k = p.cell.r + ":" + p.cell.c;
+      if (!byCell.has(k)) byCell.set(k, []);
+      byCell.get(k).push(p);
+    }
+    for (const [k, arr] of byCell) {
+      const [r, c] = k.split(":").map(Number);
+      const td = this.tdAt(r, c);
+      if (!td) continue;
+      arr.slice(0, 3).forEach((p, i) => {
+        const dot = document.createElement("div");
+        dot.className = "cell-pres";
+        dot.style.background = p.color || "#1a5fa8";
+        dot.style.right = (2 + i * 12) + "px";
+        dot.title = p.name + " está aqui";
+        dot.textContent = p.initials || "?";
+        td.appendChild(dot);
+      });
     }
   }
 

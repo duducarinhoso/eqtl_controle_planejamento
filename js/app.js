@@ -91,6 +91,17 @@ async function refreshOnline() {
     return { id: r.user_id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, email: p.email, color: p.color, loc: r.loc || {} };
   });
   renderAppPresence();
+  updateCellPresence();
+}
+/* marcador discreto no grid: onde cada pessoa online está na aba atual */
+function updateCellPresence() {
+  if (!App.grid) return;
+  if (App.view !== "grid" || !App.sheet) { App.grid.setCellPresence([]); return; }
+  const sid = String(App.sheet.id);
+  const list = (App._appPeers || [])
+    .filter((p) => p.id !== App.profile.id && p.loc && String(p.loc.sheetId) === sid && p.loc.cell)
+    .map((p) => ({ cell: p.loc.cell, name: p.name, color: p.color || colorFromString(p.id || p.name), initials: initials(p.name) }));
+  App.grid.setCellPresence(list);
 }
 function startPresence() {
   heartbeatNow().then(refreshOnline);
@@ -99,6 +110,8 @@ function startPresence() {
   rt.subscribeOnline(() => refreshOnline());   // atualização instantânea (usa o Realtime, que funciona)
 }
 function setLoc(loc) { App._loc = loc; heartbeatNow().then(refreshOnline); }
+/* ao mudar de célula, avisa os outros logo (sem esperar o heartbeat de 20s) */
+const scheduleCellBeat = debounce(() => { heartbeatNow(); }, 1200);
 
 function userChipEl() {
   return h("div", { class: "user-chip", onClick: openUserMenu },
@@ -657,28 +670,42 @@ function showEmptyState() {
 async function showDashboard() {
   App.view = "dashboard";
   App.sheet = null;
+  if (!App.dashTab) App.dashTab = "status";              // 1ª tela ao entrar no projeto = Dashboard
   setLoc({ projectId: App.project?.id, projectName: App.project?.name, view: "dashboard" });
   renderSidebar();
   renderAppPresence();
+  updateCellPresence();
   $("#nav-dashboard")?.classList.add("active");
   $("#crumb").textContent = "Dashboard";
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "none";
   rt.unsubscribeDB(); rt.leavePresence();
-  const presBox = $("#presence"); if (presBox) clear(presBox);
   const gs = $("#grid-scroll");
   clear(gs); gs.classList.add("dash");
-  gs.appendChild(h("div", { class: "spinner", style: { margin: "60px auto" } }));
 
+  const tabs = h("div", { class: "dash-tabs" });
+  const mkTab = (key, label) => h("button", { class: "dtab" + (App.dashTab === key ? " on" : ""),
+    onClick: () => { if (App.dashTab === key) return; App.dashTab = key; showDashboard(); } }, label);
+  tabs.appendChild(mkTab("status", "Visão por status"));
+  tabs.appendChild(mkTab("users", "Usuários"));
+  const body = h("div", { class: "dash-body", id: "dash-body" });
+  gs.appendChild(tabs);
+  gs.appendChild(body);
+
+  if (App.dashTab === "users") return renderDashUsers(body);
+  return renderDashStatus(body, gs);
+}
+
+async function renderDashStatus(body, gs) {
+  body.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
   let rows;
   try { rows = await store.loadStatusAggregate(App.project); }
-  catch (e) { clear(gs); gs.appendChild(h("p", { class: "muted", style: { padding: "28px" } }, "Erro ao carregar: " + e.message)); return; }
-  if (App.view !== "dashboard") return;   // usuario ja saiu
+  catch (e) { clear(body); body.appendChild(h("p", { class: "muted", style: { padding: "28px" } }, "Erro ao carregar: " + e.message)); return; }
+  if (App.view !== "dashboard" || App.dashTab !== "status") return;
 
   const sheetName = new Map(App.sheets.map((s) => [s.id, s.name]));
-  const normLabel = (v) => { const s = String(v || "").trim(); return s.toLowerCase() === "na" ? "N/A" : s; };
   const agg = new Map(); let grand = 0;
   for (const r of rows) {
-    const label = normLabel(r.value); if (!label) continue;
+    const label = normStatusLabel(r.value); if (!label) continue;
     if (!agg.has(label)) agg.set(label, { total: 0, sheets: new Map() });
     const a = agg.get(label); a.total++; grand++;
     a.sheets.set(r.sheet_id, (a.sheets.get(r.sheet_id) || 0) + 1);
@@ -686,10 +713,8 @@ async function showDashboard() {
   const order = [...STATUS_OPTIONS];
   for (const k of agg.keys()) if (!order.includes(k)) order.push(k);
 
-  clear(gs);
-  const wrap = h("div", { class: "dash-wrap" });
-  wrap.appendChild(h("h2", {}, "Dashboard"));
-  wrap.appendChild(h("p", { class: "sub" }, `Visão por status · ${grand} itens em ${App.sheets.length} abas. Clique num card para ver as abas; clique numa aba para abri-la.`));
+  clear(body);
+  body.appendChild(h("p", { class: "sub" }, `Visão por status · ${grand} itens em ${App.sheets.length} abas. Clique num card para ver as abas; clique numa aba para abri-la.`));
   const gridEl = h("div", { class: "kpi-grid" });
   for (const label of order) {
     const a = agg.get(label); if (!a) continue;
@@ -707,14 +732,11 @@ async function showDashboard() {
     card.appendChild(sheetsBox);
     gridEl.appendChild(card);
   }
-  if (!agg.size) wrap.appendChild(h("p", { class: "muted" }, "Ainda não há células de status preenchidas."));
-  wrap.appendChild(gridEl);
-  gs.appendChild(wrap);
+  if (!agg.size) body.appendChild(h("p", { class: "muted" }, "Ainda não há células de status preenchidas."));
+  body.appendChild(gridEl);
 
-  // limita a altura das listas ao espaço real ate o rodape -> o card termina na borda
-  // (sem precisar rolar a pagina). Reaplica no resize da janela.
   const fit = () => {
-    if (App.view !== "dashboard" || !gridEl.isConnected) return;
+    if (App.view !== "dashboard" || App.dashTab !== "status" || !gridEl.isConnected) return;
     const gsBottom = gs.getBoundingClientRect().bottom;
     gridEl.querySelectorAll(".kpi-sheets").forEach((el) => {
       const top = el.getBoundingClientRect().top;
@@ -725,6 +747,172 @@ async function showDashboard() {
   if (App._dashFit) window.removeEventListener("resize", App._dashFit);
   App._dashFit = fit;
   window.addEventListener("resize", fit);
+}
+
+/* ---- aba "Usuários": medidor de entregas (status × usuário + por dia) ---- */
+function normStatusLabel(v) { const s = String(v || "").trim(); return s.toLowerCase() === "na" ? "N/A" : s; }
+const STATUS_RAMP = {
+  recebido: ["#EAF3DE", "#C0DD97", "#97C459", "#173404"],
+  pendente: ["#FAEEDA", "#FAC775", "#EF9F27", "#412402"],
+  analise:  ["#E6F1FB", "#B5D4F4", "#85B7EB", "#042C53"],
+  parcial:  ["#FAECE7", "#F5C4B3", "#F0997B", "#4A1B0C"],
+  na:       ["#F1EFE8", "#D3D1C7", "#B4B2A9", "#2C2C2A"],
+};
+function rampFor(label) { return STATUS_RAMP[statusClass(label) || "na"] || STATUS_RAMP.na; }
+function heatTd(v, ramp, max) {
+  const cell = h("div", { class: "hcell" }, v ? String(v) : "·");
+  if (v) { const ratio = v / (max || 1); const i = ratio <= 0.34 ? 0 : ratio <= 0.67 ? 1 : 2; cell.style.background = ramp[i]; cell.style.color = ramp[3]; }
+  else cell.style.color = "#aab2bd";
+  return h("td", {}, cell);
+}
+function kpi(label, val) { return h("div", { class: "u-kpi" }, h("div", { class: "l" }, label), h("div", { class: "v" }, val)); }
+
+async function renderDashUsers(body) {
+  if (!App.usersOrient) App.usersOrient = "su";
+  if (!App.usersPeriod) App.usersPeriod = "30";
+  clear(body);
+
+  const seg = (items, cur, on) => {
+    const box = h("div", { class: "seg" });
+    items.forEach(([k, l]) => box.appendChild(h("button", { class: "seg-b" + (cur === k ? " on" : ""), onClick: () => on(k) }, l)));
+    return box;
+  };
+  body.appendChild(h("div", { class: "dash-head" },
+    h("div", {}, h("h2", {}, "Medidor de entregas"),
+      h("p", { class: "sub" }, "Mudanças de status por pessoa · cada mudança conta como uma entrega")),
+    h("div", { class: "dash-ctrls" },
+      seg([["7", "7 dias"], ["30", "30 dias"], ["all", "Tudo"]], App.usersPeriod, (k) => { App.usersPeriod = k; renderDashUsers(body); }),
+      seg([["su", "Status × Usuário"], ["us", "Usuário × Status"]], App.usersOrient, (k) => { App.usersOrient = k; renderDashUsers(body); }))));
+  const spin = h("div", { class: "spinner", style: { margin: "50px auto" } });
+  body.appendChild(spin);
+
+  const days = App.usersPeriod === "7" ? 7 : App.usersPeriod === "30" ? 30 : null;
+  const since = days ? new Date(Date.now() - days * 86400000) : null;
+  let rows;
+  try { rows = await store.loadUserActivity(App.project, since); }
+  catch (e) {
+    spin.remove();
+    const hint = /function|does not exist|404|user_status_activity/i.test(e.message || "") ? " — rode sql/14_user_metrics.sql no Supabase." : "";
+    body.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Não consegui carregar o medidor: " + e.message + hint));
+    return;
+  }
+  if (App.view !== "dashboard" || App.dashTab !== "users") return;
+  spin.remove();
+  if (!rows.length) { body.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Sem mudanças de status no período selecionado.")); return; }
+
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  const users = userIds.map((id) => { const p = App.profilesMap.get(id) || {}; return { id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, color: p.color, avatar_url: p.avatar_url }; });
+  users.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const statuses = [...STATUS_OPTIONS];
+  for (const r of rows) { const l = normStatusLabel(r.status); if (l && !statuses.includes(l)) statuses.push(l); }
+
+  const count = {}; const perDay = {}; const daySet = new Set(); let total = 0;
+  for (const r of rows) {
+    const uid = r.user_id, st = normStatusLabel(r.status), q = Number(r.qtd) || 0;
+    total += q;
+    (count[uid] = count[uid] || {})[st] = (count[uid][st] || 0) + q;
+    (perDay[uid] = perDay[uid] || {})[r.dia] = (perDay[uid][r.dia] || 0) + q;
+    daySet.add(r.dia);
+  }
+  const colByStatus = (st) => users.reduce((s, u) => s + ((count[u.id] || {})[st] || 0), 0);
+  const rowByUser = (uid) => statuses.reduce((s, st) => s + ((count[uid] || {})[st] || 0), 0);
+
+  let topSt = "", topN = -1;
+  statuses.forEach((st) => { const n = colByStatus(st); if (n > topN) { topN = n; topSt = st; } });
+  body.appendChild(h("div", { class: "u-kpis" },
+    kpi("Mudanças no período", String(total)),
+    kpi("Pessoas ativas", String(users.length)),
+    kpi("Status mais frequente", topN > 0 ? topSt : "—"),
+    kpi("Média por dia", String(daySet.size ? Math.round(total / daySet.size) : 0))));
+
+  let mmax = 0;
+  statuses.forEach((st) => users.forEach((u) => { const v = (count[u.id] || {})[st] || 0; if (v > mmax) mmax = v; }));
+  const card1 = h("div", { class: "u-card" });
+  card1.appendChild(h("div", { class: "u-card-h" }, h("h3", {}, "Matriz de status"),
+    h("span", { class: "sub" }, App.usersOrient === "su" ? "linhas = status · colunas = pessoas" : "linhas = pessoas · colunas = status")));
+  card1.appendChild(buildMatrix(App.usersOrient, users, statuses, count, mmax, total, rowByUser, colByStatus));
+  body.appendChild(card1);
+
+  let dias = [...daySet].sort();
+  let capped = false;
+  if (dias.length > 21) { dias = dias.slice(-21); capped = true; }
+  let dmax = 0;
+  users.forEach((u) => dias.forEach((d) => { const v = (perDay[u.id] || {})[d] || 0; if (v > dmax) dmax = v; }));
+  const card2 = h("div", { class: "u-card" });
+  card2.appendChild(h("div", { class: "u-card-h" }, h("h3", {}, "Entregas por dia"),
+    h("span", { class: "sub" }, capped ? "últimos 21 dias com atividade" : "por pessoa · dias com atividade")));
+  card2.appendChild(buildDaily(users, dias, perDay, dmax));
+  body.appendChild(card2);
+}
+
+function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, colByStatus) {
+  const wrap = h("div", { class: "u-tablewrap" });
+  const table = h("table", { class: "umx" });
+  if (orient === "su") {
+    const head = h("tr", {}, h("th", { class: "rh" }, "Status"));
+    users.forEach((u) => head.appendChild(h("th", { title: u.name }, avatarEl(u, 24))));
+    head.appendChild(h("th", {}, "Total"));
+    table.appendChild(h("thead", {}, head));
+    const tb = h("tbody", {});
+    statuses.forEach((st) => {
+      const ramp = rampFor(st);
+      const tr = h("tr", {}, h("td", { class: "rh" }, h("span", { class: "chip " + (statusClass(st) || "na") }, st)));
+      users.forEach((u) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, ramp, mmax)));
+      tr.appendChild(h("td", { class: "tot" }, String(colByStatus(st))));
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    const tf = h("tr", {}, h("td", { class: "rh" }, "Total"));
+    users.forEach((u) => tf.appendChild(h("td", { class: "tot" }, String(rowByUser(u.id)))));
+    tf.appendChild(h("td", { class: "tot" }, String(total)));
+    table.appendChild(h("tfoot", {}, tf));
+  } else {
+    const head = h("tr", {}, h("th", { class: "rh" }, "Pessoa"));
+    statuses.forEach((st) => head.appendChild(h("th", {}, h("span", { class: "chip " + (statusClass(st) || "na") }, st))));
+    head.appendChild(h("th", {}, "Total"));
+    table.appendChild(h("thead", {}, head));
+    const tb = h("tbody", {});
+    users.forEach((u) => {
+      const tr = h("tr", {}, h("td", { class: "rh" }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+      statuses.forEach((st) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, rampFor(st), mmax)));
+      tr.appendChild(h("td", { class: "tot" }, String(rowByUser(u.id))));
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    const tf = h("tr", {}, h("td", { class: "rh" }, "Total"));
+    statuses.forEach((st) => tf.appendChild(h("td", { class: "tot" }, String(colByStatus(st)))));
+    tf.appendChild(h("td", { class: "tot" }, String(total)));
+    table.appendChild(h("tfoot", {}, tf));
+  }
+  wrap.appendChild(table);
+  return wrap;
+}
+
+function buildDaily(users, dias, perDay, dmax) {
+  const wrap = h("div", { class: "u-tablewrap" });
+  const table = h("table", { class: "umx" });
+  const ramp = STATUS_RAMP.recebido;
+  const fmtDay = (iso) => { const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] : iso; };
+  const head = h("tr", {}, h("th", { class: "rh" }, "Pessoa"));
+  dias.forEach((d) => head.appendChild(h("th", {}, fmtDay(d))));
+  head.appendChild(h("th", {}, "Total"));
+  table.appendChild(h("thead", {}, head));
+  const tb = h("tbody", {});
+  users.forEach((u) => {
+    const tr = h("tr", {}, h("td", { class: "rh" }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+    let t = 0;
+    dias.forEach((d) => { const v = (perDay[u.id] || {})[d] || 0; t += v; tr.appendChild(heatTd(v, ramp, dmax)); });
+    tr.appendChild(h("td", { class: "tot" }, String(t)));
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  const tf = h("tr", {}, h("td", { class: "rh" }, "Total/dia"));
+  let gt = 0;
+  dias.forEach((d) => { let c = 0; users.forEach((u) => { c += (perDay[u.id] || {})[d] || 0; }); gt += c; tf.appendChild(h("td", { class: "tot" }, String(c))); });
+  tf.appendChild(h("td", { class: "tot" }, String(gt)));
+  table.appendChild(h("tfoot", {}, tf));
+  wrap.appendChild(table);
+  return wrap;
 }
 
 /* ============================ SELECT SHEET ============================ */
@@ -782,6 +970,7 @@ async function selectSheet(sheet) {
   // presenca: canal da aba (flags de edicao por celula) + atualiza localizacao global
   rt.joinPresence(sheet.id, App.profile, (peers) => { App.grid.setPeers(peers, App.profile.id); });
   setLoc({ projectId: App.project?.id, projectName: App.project?.name, sheetId: sheet.id, sheetName: sheet.name, view: "sheet" });
+  updateCellPresence();
 }
 
 async function reloadCurrent() {
@@ -899,7 +1088,7 @@ const actions = {
   onEditing: (key) => rt.setEditingCell(App.profile, key),
   onSelect: (sel, rec) => {
     const info = $("#sel-info"); if (info) info.textContent = `${colName(sel.c)}${sel.r}`;
-    if (App._loc) App._loc.cell = { r: sel.r, c: sel.c };   // p/ "Ir para célula" (enviado no próximo heartbeat)
+    if (App._loc) { App._loc.cell = { r: sel.r, c: sel.c }; scheduleCellBeat(); }   // avisa os outros onde estou
     syncToolbar((rec && rec.format) || {});
   },
   openHistory: (r, c) => openHistory(r, c),
