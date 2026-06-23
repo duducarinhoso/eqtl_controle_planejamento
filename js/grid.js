@@ -407,12 +407,23 @@ export class Grid {
   async copySelection() {
     const { r1, r2, c1, c2 } = this.selRange();
     const rows = [];
+    const cells = [];               // estrutura completa (valor+tipo+formato) p/ colar interno
     for (let r = r1; r <= r2; r++) {
-      const cols = [];
-      for (let c = c1; c <= c2; c++) { const rec = this.get(r, c); cols.push(rec && rec.value != null ? String(rec.value) : ""); }
+      const cols = [], crow = [];
+      for (let c = c1; c <= c2; c++) {
+        const rec = this.get(r, c);
+        cols.push(rec && rec.value != null ? String(rec.value) : "");
+        crow.push({
+          value: rec && rec.value != null ? rec.value : null,
+          data_type: (rec && rec.data_type) || "text",
+          format: (rec && rec.format) || {},
+        });
+      }
       rows.push(cols.join("\t"));
+      cells.push(crow);
     }
     this._clip = rows.join("\n");
+    this._clipCells = cells;         // usado se o clipboard ainda tiver o que copiamos aqui
     try { await navigator.clipboard.writeText(this._clip); } catch (_) {}
   }
 
@@ -421,16 +432,35 @@ export class Grid {
     try { text = await navigator.clipboard.readText(); } catch (_) { text = this._clip || ""; }
     if (!text) text = this._clip || "";
     if (!text) return;
+    // colar INTERNO (o clipboard ainda tem o que copiamos aqui): leva o tipo de lista
+    // (status/dropdown) e a formatacao. colar EXTERNO (ex.: do Excel): leva so o texto.
+    const internal = this._clipCells && text === this._clip;
     const lines = text.replace(/\r/g, "").split("\n");
     if (lines.length && lines[lines.length - 1] === "") lines.pop();
-    const { r, c } = this.sel;
+    const grid = lines.map((line) => line.split("\t"));
+
+    const { r1, r2, c1, c2 } = this.selRange();
     const list = [];
-    lines.forEach((line, i) => line.split("\t").forEach((val, j) => {
-      const rr = r + i, cc = c + j;
+    const put = (rr, cc, val, si, sj) => {
       if (rr > this.sheet.row_count || cc > this.sheet.col_count) return;
       const rec = this.get(rr, cc);
-      list.push({ r: rr, c: cc, state: { value: val, data_type: (rec && rec.data_type) || "text", format: (rec && rec.format) || {}, merge: (rec && rec.merge) || null, covered_by: (rec && rec.covered_by) || null } });
-    }));
+      const src = internal && this._clipCells[si] && this._clipCells[si][sj];
+      list.push({ r: rr, c: cc, state: {
+        value: val,
+        data_type: src ? src.data_type : ((rec && rec.data_type) || "text"),
+        format: src ? { ...src.format } : ((rec && rec.format) || {}),
+        merge: (rec && rec.merge) || null, covered_by: (rec && rec.covered_by) || null,
+      } });
+    };
+
+    // 1 celula copiada para uma selecao de varias -> preenche a selecao inteira (estilo Excel).
+    // Util para converter um intervalo de celulas "normais" em celulas de lista de uma vez.
+    if (grid.length === 1 && grid[0].length === 1 && (r1 !== r2 || c1 !== c2)) {
+      for (let r = r1; r <= r2; r++)
+        for (let c = c1; c <= c2; c++) put(r, c, grid[0][0], 0, 0);
+    } else {
+      grid.forEach((cols, i) => cols.forEach((val, j) => put(r1 + i, c1 + j, val, i, j)));
+    }
     if (list.length) this._writeCells(list);
   }
 
