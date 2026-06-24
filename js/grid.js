@@ -879,7 +879,7 @@ export class Grid {
         case "F2": e.preventDefault(); this.startEdit(); break;
         case "Delete": case "Backspace": e.preventDefault(); this.clearSelection(); break;
         default:
-          if (e.key.length === 1 && !e.altKey) this.startEdit(e.key);
+          if (e.key.length === 1 && !e.altKey) { e.preventDefault(); this.startEdit(e.key); }
       }
     });
   }
