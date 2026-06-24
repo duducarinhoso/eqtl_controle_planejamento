@@ -255,6 +255,58 @@ function addUserForm() {
   ]);
 }
 
+/* ===================== TELA INICIAL (SELECAO DE MODULO) ===================== */
+function showHome() {
+  App.project = null; App.sheet = null;
+  rt.unsubscribeDB(); rt.leavePresence();
+  setLoc({ view: "home" });
+  $("#auth-root").hidden = true;
+  const root = $("#app-root"); root.hidden = false;
+  clear(root);
+  root.appendChild(buildHome());
+}
+
+function buildHome() {
+  const el = document.createElement("main");
+  el.className = "home";
+  el.setAttribute("aria-label", "Tela inicial");
+  el.innerHTML = `
+    <span class="corner-mark">Selecione um módulo</span>
+    <section class="panel panel-green" aria-label="Área Auditoria">
+      <div class="panel-content">
+        <a class="liquid-button" href="#/projetos" aria-label="Abrir Auditoria">
+          <span class="glass-flow" aria-hidden="true"></span>
+          <span class="glass-sheen" aria-hidden="true"></span>
+          <span class="border-runner" aria-hidden="true"></span>
+          <span class="button-copy">
+            <span class="button-label">Auditoria</span>
+            <span class="button-meta">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5.5 13h6l-.5 9L18.5 11h-6L13 2Z"></path></svg>
+              <span>Controle de solicitações</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    </section>
+    <section class="panel panel-blue" aria-label="Área Cronograma">
+      <div class="panel-content">
+        <a class="liquid-button" aria-label="Cronograma inativo, em construção" aria-disabled="true" tabindex="-1">
+          <span class="glass-flow" aria-hidden="true"></span>
+          <span class="glass-sheen" aria-hidden="true"></span>
+          <span class="border-runner" aria-hidden="true"></span>
+          <span class="button-copy">
+            <span class="button-label">Cronograma</span>
+            <span class="button-meta">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.25-1 10.5-10.5a2.12 2.12 0 0 0-3-3L5.25 16 4 20Z"></path><path d="m14.5 6.75 3 3"></path></svg>
+              <span>Inativo · em construção</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    </section>`;
+  return el;
+}
+
 /* ============================ TELA INICIAL (PROJETOS) ============================ */
 async function showProjects() {
   if (!(await ensureProfile())) return;
@@ -395,8 +447,12 @@ async function applyRoute() {
   if (!(await ensureProfile())) return;
   if (App.profile.must_change_password) return forceChangePassword();   // 1º acesso: trocar senha
   const m = hash.match(/^#\/p\/([^/]+)(?:\/s\/([^/]+))?$/);
-  if (!m) {                                  // tela inicial (projetos)
-    if (!(App.project === null && document.querySelector(".landing"))) await showProjects();
+  if (!m) {
+    if (hash === "#/projetos") {              // entrou na Auditoria: lista de projetos
+      if (!(App.project === null && document.querySelector(".landing"))) await showProjects();
+    } else {                                  // tela inicial: seleção de módulo
+      showHome();
+    }
     return;
   }
   const pid = decodeURIComponent(m[1]);
@@ -1280,6 +1336,7 @@ function openUserMenu(e) {
   if (isAdmin()) {
     m.appendChild(h("div", { class: "sep" }));
     item("Importar / atualizar do Excel (.xlsx)…", openExcelImport);
+    item("Importar da EY (colar JSON)…", openEyImport);
     item("Importar seed (.json) — avançado…", openImport);
   }
   m.appendChild(h("div", { class: "sep" }));
@@ -1325,6 +1382,48 @@ function openImport() {
     if (first) selectSheet(first);
   };
   input.click();
+}
+
+/* ============================ IMPORTAR DA EY (JSON do portal) ============================ */
+/* Recebe o JSON gerado pelo snippet do EY Canvas Client Portal (ver
+   tools/ey_export_snippet.js) e faz upsert na tabela ey_requests. Sem arquivo e
+   sem diálogo "salvar como": o snippet copia o JSON; aqui a gente cola. */
+function openEyImport() {
+  const info = h("p", { class: "muted", style: { margin: "0 0 8px", lineHeight: "1.45" } },
+    "Com o portal EY aberto, rode o snippet (ou clique no favorito). Ele copia o JSON das solicitações. ",
+    h("b", {}, "Cole abaixo"), " e importe — vai para a tabela ", h("code", {}, "ey_requests"), " (não mexe na grade).");
+  const ta = h("textarea", {
+    rows: 8, spellcheck: "false", placeholder: "Cole aqui o JSON copiado pelo snippet…",
+    style: { width: "100%", boxSizing: "border-box", fontFamily: "monospace", fontSize: "12px",
+             padding: "8px", border: "1px solid var(--border, #ccc)", borderRadius: "8px", resize: "vertical" },
+  });
+  const status = h("p", { class: "muted", style: { margin: "8px 0 0", minHeight: "18px" } }, "");
+  const pasteBtn = h("button", { class: "btn btn-ghost btn-sm", onClick: async () => {
+    try { ta.value = await navigator.clipboard.readText(); status.textContent = "Colado da área de transferência."; }
+    catch (e) { status.textContent = "Não consegui ler a área de transferência — cole manualmente (Ctrl+V)."; }
+  } }, "📋 Colar da área de transferência");
+  const body = h("div", {}, info, h("div", { style: { margin: "0 0 8px" } }, pasteBtn), ta, status);
+
+  openModal("Importar da EY", body, [
+    { label: "Fechar" },
+    { label: "Importar", primary: true, onClick: async () => {
+      let payload;
+      try { payload = JSON.parse((ta.value || "").trim()); }
+      catch (e) { return toast("JSON inválido: " + e.message, "err"); }
+      const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : null);
+      if (!rows || !rows.length) return toast("Nenhuma solicitação encontrada no JSON.", "err");
+      if (rows[0].client_request_id == null) return toast("Formato inesperado (faltou client_request_id). Use o snippet oficial.", "err");
+      status.textContent = "Importando…";
+      try {
+        const { upserted } = await store.upsertEyRequests(rows, (m) => { status.textContent = m; });
+        const byG = {};
+        for (const r of rows) { const g = r.group_name || "(sem grupo)"; byG[g] = (byG[g] || 0) + 1; }
+        const resumo = Object.entries(byG).sort((a, b) => a[0].localeCompare(b[0])).map(([g, n]) => `${g}: ${n}`).join(" · ");
+        toast(`Importadas ${upserted} solicitações da EY.`);
+        status.textContent = "✅ " + upserted + " solicitações · " + resumo;
+      } catch (e) { toast("Erro ao importar: " + e.message, "err"); status.textContent = "Falhou: " + e.message; }
+    } },
+  ]);
 }
 
 /* ============================ EXPORTAR EXCEL ============================ */

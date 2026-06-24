@@ -550,3 +550,111 @@ export async function importWorkbook(sheets, project, onProgress = () => {}) {
   onProgress("Concluído.");
   return { created, totalCells };
 }
+
+/* ===================== ESPELHO EY (tabela ey_requests) ===================== */
+/* Upsert idempotente das solicitações vindas do snippet do EY Canvas Client
+   Portal. Conflito por client_request_id (id estável da EY). NÃO gera histórico
+   nem toca na grade (sheets/cells) — é um espelho cru, à parte. `rows` já vem no
+   formato das colunas (ver tools/ey_export_snippet.js). */
+export async function upsertEyRequests(rows, onProgress = () => {}) {
+  if (!Array.isArray(rows) || !rows.length) return { upserted: 0 };
+  const nowIso = new Date().toISOString();
+  const stamped = rows.map((r) => ({ ...r, synced_at: nowIso }));   // marca o horário da sincronização
+  const B = 500;
+  let done = 0;
+  for (let i = 0; i < stamped.length; i += B) {
+    const batch = stamped.slice(i, i + B);
+    const { error } = await supabase.from("ey_requests").upsert(batch, { onConflict: "client_request_id" });
+    if (error) throw error;
+    done += batch.length;
+    onProgress(`${done}/${stamped.length} solicitações`);
+  }
+  return { upserted: done };
+}
+
+/* Solicitações já espelhadas no banco, opcionalmente de um engagement. Para
+   conferência/telas futuras. */
+export async function listEyRequests(engagementId = null) {
+  let q = supabase.from("ey_requests").select("*").order("group_name").order("reference_number");
+  if (engagementId) q = q.eq("engagement_id", engagementId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+/* ===================== SYNC INCREMENTAL (RPC ey_sync) ===================== */
+/* Manda o extrato de um engagement; o servidor faz a VARREDURA por hash e grava
+   só os deltas (added/updated), pula os iguais, marca os que sumiram
+   (in_portal=false) e loga campo a campo o que mudou. Não sobrecarrega o banco.
+   `rows` = saída de EY.fetchRequests / mapRequest (ver tools/ey_api.js).
+   Retorna { run_id, added, updated, unchanged, removed, total }. */
+export async function eySync(engagementId, rows, { runByLabel = null, source = "app" } = {}) {
+  const { data, error } = await supabase.rpc("ey_sync", {
+    p_engagement_id: engagementId, p_rows: rows, p_run_by_label: runByLabel, p_source: source });
+  if (error) throw error;
+  return data;
+}
+
+/* Sincroniza o catálogo de engagements via RPC (registra a execução: quem/quando/o quê). */
+export async function eySyncEngagements(rows, { runByLabel = null, source = "app" } = {}) {
+  const { data, error } = await supabase.rpc("ey_sync_engagements", {
+    p_rows: rows, p_run_by_label: runByLabel, p_source: source });
+  if (error) throw error;
+  return data;
+}
+
+/* Documentos (aba View by document do relatório). Ligados às solicitações pela
+   chave (engagement|#|grupo). Substitui o conjunto do engagement a cada sync. */
+export async function eySyncDocuments(engagementId, rows, { runByLabel = null, source = "relatorio" } = {}) {
+  const { data, error } = await supabase.rpc("ey_sync_documents", {
+    p_engagement_id: engagementId, p_rows: rows, p_run_by_label: runByLabel, p_source: source });
+  if (error) throw error;
+  return data;
+}
+
+/* ===================== CATÁLOGO EY (ey_engagements) ===================== */
+export async function upsertEyEngagements(list, { deactivateMissing = true } = {}) {
+  if (!Array.isArray(list) || !list.length) return { upserted: 0 };
+  const nowIso = new Date().toISOString();
+  const rows = list.map((e) => ({
+    engagement_id: e.engagement_id, name: e.name, domain: e.domain, status_id: e.status_id,
+    groups: e.groups || null, is_active: true, last_seen_at: nowIso, raw: e.raw || null,
+  }));
+  const { error } = await supabase.from("ey_engagements").upsert(rows, { onConflict: "engagement_id" });
+  if (error) throw error;
+  if (deactivateMissing) {   // os que NÃO vieram nesta rodada -> inativos (não apaga)
+    const ids = rows.map((r) => r.engagement_id);
+    await supabase.from("ey_engagements").update({ is_active: false })
+      .not("engagement_id", "in", "(" + ids.join(",") + ")");
+  }
+  return { upserted: rows.length };
+}
+export async function listEyEngagements({ activeOnly = false } = {}) {
+  let q = supabase.from("ey_engagements").select("*").order("is_active", { ascending: false }).order("name");
+  if (activeOnly) q = q.eq("is_active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+/* ===================== LOGS (acompanhamento / histórico) ===================== */
+export async function listEySyncRuns(limit = 50) {
+  const { data, error } = await supabase.from("ey_sync_runs").select("*")
+    .order("started_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+export async function listEyRequestChanges(clientRequestId, limit = 100) {
+  const { data, error } = await supabase.from("ey_request_changes").select("*")
+    .eq("client_request_id", clientRequestId).order("changed_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+/* Documentos de uma solicitação (ey_request_documents). */
+export async function listEyRequestDocuments(clientRequestId) {
+  const { data, error } = await supabase.from("ey_request_documents").select("*")
+    .eq("client_request_id", clientRequestId).order("upload_date", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
