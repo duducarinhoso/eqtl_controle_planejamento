@@ -8,6 +8,17 @@ import { parseAbas } from "./parser.js";
 import { openSolic, refreshSolic } from "./solic.js";
 import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, getCompanies, setCompanies } from "./util.js";
 
+/* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
+   tentando montar os gráficos/medidores DEMO do modelo (IDs lastWeekChart/topProductsChart/
+   leadsChart, classes .g-svg/.spark) — que não existem no app. Sem eles, o Chart.js polui o
+   console com "Failed to create chart". Só roda quando esses alvos do modelo existem (nunca, no
+   app), virando no-op sem regressão. Não altera o ds.js (verbatim do modelo). */
+if (typeof window.renderAll === "function") {
+  const _renderAll = window.renderAll;
+  const MODEL_TARGETS = "#lastWeekChart, #topProductsChart, #leadsChart, .g-svg, .spark";
+  window.renderAll = () => { if (document.querySelector(MODEL_TARGETS)) _renderAll(); };
+}
+
 const BG_COLORS = ["", "#fff3cd", "#d4edbc", "#cfe2ff", "#f8d7da", "#e2d9f3", "#ffe5d0", "#d9dae0", "#0d1f33"];
 const TX_COLORS = ["#191c20", "#004786", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#ffffff", "#727782"];
 
@@ -127,14 +138,26 @@ function userChipEl() {
 
 function isAdmin() { return !!(App.profile && App.profile.role === "adm"); }
 
+/* ---- Papéis de acesso (exibição). Banco continua com role 'adm'/'operador'.
+   Mapeamento não-destrutivo: adm→Adm, operador→Operador, resto→Visitante. ---- */
+function roleKey() {
+  const r = (App.profile && App.profile.role) || "";
+  if (r === "adm") return "adm";
+  if (r === "operador") return "operador";
+  return "visitante";
+}
+function roleLabel() {
+  return { adm: "Adm", operador: "Operador", visitante: "Visitante" }[roleKey()];
+}
+/* quem enxerga o módulo Administração (por ora, só Adm) */
+function canSeeAdmin() { return roleKey() === "adm"; }
+
 /* carrega a lista de status do banco (status_options). Degrada para a lista
    padrao embutida se a tabela ainda nao existir (sql/15_status_options.sql). */
 async function reloadStatusOptions() {
   try { const opts = await store.loadStatusOptions(); if (opts.length) setStatusOptions(opts); }
   catch (_) { /* tabela ainda nao criada: mantem o padrao */ }
 }
-/* carrega a lista de empresas (companies). Degrada para vazio se a tabela
-   ainda nao existir (sql/16_companies.sql). */
 async function reloadCompanies() {
   try { const c = await store.loadCompanies(); setCompanies(c); App.companies = c; }
   catch (_) { App.companies = []; setCompanies([]); }
@@ -269,42 +292,100 @@ function addUserForm() {
   ]);
 }
 
+/* ===================== TELA INICIAL (SELECAO DE MODULO) ===================== */
+function showHome() {
+  App.project = null; App.sheet = null;
+  rt.unsubscribeDB(); rt.leavePresence();
+  setLoc({ view: "home" });
+  $("#auth-root").hidden = true;
+  const root = $("#app-root"); root.hidden = false;
+  clear(root);
+  root.appendChild(buildHome());
+}
+
+function buildHome() {
+  const el = document.createElement("main");
+  el.className = "home";
+  el.setAttribute("aria-label", "Tela inicial");
+  el.innerHTML = `
+    <span class="corner-mark">Selecione um módulo</span>
+    <section class="panel panel-green" aria-label="Área Auditoria">
+      <div class="panel-content">
+        <a class="liquid-button" href="#/operacoes" aria-label="Abrir Auditoria">
+          <span class="glass-flow" aria-hidden="true"></span>
+          <span class="glass-sheen" aria-hidden="true"></span>
+          <span class="border-runner" aria-hidden="true"></span>
+          <span class="button-copy">
+            <span class="button-label">Auditoria</span>
+            <span class="button-meta">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5.5 13h6l-.5 9L18.5 11h-6L13 2Z"></path></svg>
+              <span>Protótipo rápido</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    </section>
+    <section class="panel panel-blue" aria-label="Área Cronograma">
+      <div class="panel-content">
+        <a class="liquid-button" aria-label="Cronograma inativo, em construção" aria-disabled="true" tabindex="-1">
+          <span class="glass-flow" aria-hidden="true"></span>
+          <span class="glass-sheen" aria-hidden="true"></span>
+          <span class="border-runner" aria-hidden="true"></span>
+          <span class="button-copy">
+            <span class="button-label">Cronograma</span>
+            <span class="button-meta">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.25-1 10.5-10.5a2.12 2.12 0 0 0-3-3L5.25 16 4 20Z"></path><path d="m14.5 6.75 3 3"></path></svg>
+              <span>Inativo · em construção</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    </section>`;
+  return el;
+}
+
 /* ============================ TELA INICIAL (PROJETOS) ============================ */
 async function showProjects() {
   if (!(await ensureProfile())) return;
   App.project = null; App.sheet = null;
   rt.unsubscribeDB(); rt.leavePresence();
   setLoc({ view: "projects" });
-  $("#auth-root").hidden = true;
-  const root = $("#app-root"); root.hidden = false;
-  clear(root);
-  root.appendChild(buildLanding());
+  const slot = mountModuleShell("ops-proj");
+  slot.appendChild(buildLandingBody());
   await loadLanding();
 }
 
-function buildLanding() {
-  const search = h("input", { class: "input proj-search", type: "search", placeholder: "Buscar projeto…",
-    oninput: (e) => renderProjectCards(App._projects || [], e.target.value) });
+/* Corpo da landing (cards + busca) para montar dentro do module shell.
+   O rail já fornece marca e usuário, então dispensamos o chrome de tela cheia. */
+function buildLandingBody() {
   const grid = h("div", { class: "proj-grid", id: "proj-grid" });
-  const top = h("header", { class: "landing-top" },
-    h("img", { class: "landing-logo", src: "app_planejamento_logo.png", alt: "App Planejamento" }),
-    h("div", { class: "spacer", style: { flex: 1 } }),
-    isAdmin() ? h("button", { class: "landing-gear", title: "Administração de usuários", onClick: openAdminPanel }, "⚙") : null,
-    userChipEl());
+  const usersSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  const plusSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
   const head = h("div", { class: "landing-head" },
-    h("div", {}, h("div", { class: "t-display" }, "Projetos"),
-      h("p", { class: "muted", style: { margin: "2px 0 0" } }, "Selecione um projeto para abrir ou crie um novo.")),
-    h("div", { class: "landing-actions" }, search,
-      h("button", { class: "btn btn-primary", onClick: newProject }, "＋ Novo projeto")));
-  return h("div", { class: "landing" }, top, h("div", { class: "landing-body" }, head, grid));
+    h("p", { class: "muted", style: { margin: 0 } }, "Selecione um projeto para abrir ou crie um novo."),
+    h("div", { class: "landing-actions" },
+      isAdmin() ? h("button", { class: "btn btn-ghost", onClick: openAdminPanel }, h("span", { html: usersSvg, style: { display: "inline-flex" } }), "Usuários") : null,
+      h("button", { class: "btn btn-primary", onClick: newProject }, h("span", { html: plusSvg, style: { display: "inline-flex" } }), "Novo projeto")));
+  return h("div", { class: "landing-body" }, head, grid);
 }
+
+/* (buildLanding legada removida — era a landing full-screen com barra navy;
+   a tela Projetos agora vive no shell do modelo via buildLandingBody.) */
 
 async function loadLanding() {
   const grid = $("#proj-grid"); if (!grid) return;
   grid.innerHTML = '<div class="spinner" style="margin:48px auto"></div>';
   let projects, summary, lastch;
   try { [projects, summary, lastch] = await Promise.all([store.listProjects(), store.loadProjectsStatusSummary(), store.loadProjectsLastChange()]); }
-  catch (e) { clear(grid); grid.appendChild(h("p", { class: "muted" }, "Erro ao carregar: " + e.message)); return; }
+  catch (e) {
+    clear(grid);
+    grid.appendChild(h("div", { class: "card", style: { gridColumn: "1 / -1" } },
+      h("div", { class: "card-body" },
+        h("p", { style: { margin: "0 0 8px", color: "var(--red)", fontWeight: 600 } }, "Não foi possível carregar os projetos."),
+        h("p", { class: "muted", style: { margin: "0 0 14px", fontSize: "12.5px" } }, e.message),
+        h("button", { class: "btn btn-ghost btn-sm", onClick: loadLanding }, "Tentar novamente"))));
+    return;
+  }
   App._projects = projects; App._summary = summary; App._lastch = lastch;
   renderProjectCards(projects, "");
 }
@@ -314,28 +395,39 @@ function renderProjectCards(projects, q) {
   clear(grid);
   const ql = (q || "").trim().toLowerCase();
   const list = projects.filter((p) => !ql || p.name.toLowerCase().includes(ql) || (p.description || "").toLowerCase().includes(ql));
-  if (!list.length) { grid.appendChild(h("p", { class: "muted", style: { padding: "20px 4px" } }, "Nenhum projeto encontrado.")); return; }
+  if (!list.length) {
+    grid.appendChild(h("div", { class: "card", style: { gridColumn: "1 / -1" } },
+      h("div", { class: "card-body", style: { textAlign: "center", padding: "32px 20px" } },
+        h("p", { style: { margin: "0 0 4px", fontWeight: 600 } }, q ? "Nenhum projeto encontrado." : "Nenhum projeto ainda."),
+        h("p", { class: "muted", style: { margin: "0 0 16px", fontSize: "12.5px" } }, q ? "Tente outro termo de busca." : "Crie o primeiro projeto para começar."),
+        q ? null : h("button", { class: "btn btn-primary btn-sm", onClick: newProject }, "Novo projeto"))));
+    return;
+  }
   list.forEach((p) => grid.appendChild(projectCard(p)));
 }
 
 function projectCard(p) {
   const sum = (App._summary && (App._summary.get(p.id) || (p.synthetic && App._summary.get("__all__")))) || new Map();
-  const chips = h("div", { class: "pc-status" });
+  const chips = h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } });
   const seen = new Set();
-  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(h("span", { class: "chip " + (statusClassFor(s) || "na") }, `${s} · ${n}`)); seen.add(s); } });
-  for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(h("span", { class: "chip na" }, `${k} · ${n}`));
+  const badge = (label, n, cls) => h("span", { class: "badge st-" + (cls || "na") }, `${label} · ${n}`);
+  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(badge(s, n, statusClassFor(s) || "na")); seen.add(s); } });
+  for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(badge(k, n, "na"));
   if (!chips.childNodes.length) chips.appendChild(h("span", { class: "muted", style: { fontSize: "11px" } }, "Sem status preenchidos"));
-  return h("div", { class: "proj-card", onClick: () => goProject(p.id) },
-    h("div", { class: "pc-top" },
-      h("div", { class: "pc-name" }, p.name),
-      p.synthetic ? null : h("div", { class: "pc-actions" },
-        h("button", { class: "pc-edit", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); } }, "✎"),
-        h("button", { class: "pc-menu", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); } }, "⋯"))),
-    h("div", { class: "pc-desc" }, p.description || "Sem descrição."),
-    h("div", { class: "pc-meta" },
+  const editBtn = h("button", { class: "card-act", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); },
+    html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' });
+  const moreBtn = h("button", { class: "card-act", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); },
+    html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>' });
+  const actions = p.synthetic ? null : h("div", { style: { display: "flex", gap: "4px", flex: "0 0 auto" } }, editBtn, moreBtn);
+  const body = h("div", { class: "card-body" },
+    h("p", { class: "muted", style: { margin: "0 0 10px" } }, p.description || "Sem descrição."),
+    h("div", { style: { display: "flex", gap: "16px", fontSize: "11.5px", color: "var(--text-dim)", marginBottom: "12px" } },
       h("span", {}, "Criado: " + (p.created_at ? fmtDate(p.created_at) : "—")),
       h("span", {}, "Atualizado: " + ((App._lastch && App._lastch.get(p.id)) ? fmtDate(App._lastch.get(p.id)) : "—"))),
     chips);
+  return h("div", { class: "card", style: { cursor: "pointer" }, onClick: () => goProject(p.id) },
+    h("div", { class: "card-head" }, h("h3", {}, p.name), actions),
+    body);
 }
 
 function newProject() {
@@ -386,6 +478,7 @@ async function delProject(p) {
    Assim F5 restaura a tela e Voltar/Avançar navegam dentro do app. */
 function go(hash) { if (location.hash === hash) applyRoute(); else location.hash = hash; }
 function goProjects() { go("#/projetos"); }
+function goOperacoes() { go("#/operacoes"); }
 function goProject(pid) { go("#/p/" + encodeURIComponent(pid)); }
 function goSheet(pid, sid) { go("#/p/" + encodeURIComponent(pid) + "/s/" + encodeURIComponent(sid)); }
 function goToCell(pid, sid, r, c) {
@@ -409,13 +502,27 @@ async function applyRoute() {
   if (!(await ensureProfile())) return;
   if (App.profile.must_change_password) return forceChangePassword();   // 1º acesso: trocar senha
   const m = hash.match(/^#\/p\/([^/]+)(?:\/s\/([^/]+))?$/);
-  if (!m) {                                  // tela inicial (projetos)
-    if (!(App.project === null && document.querySelector(".landing"))) await showProjects();
+  if (!m) {
+    // ----- Operações: lista de projetos dentro do module shell -----
+    if (hash === "#/operacoes" || hash === "#/projetos") { await showProjects(); return; }
+    // ----- Portal EY (placeholders) -----
+    if (hash === "#/ey" || hash === "#/ey/solicitacoes") { showModulePlaceholder("ey-solic"); return; }
+    if (hash === "#/ey/executar")    { showModulePlaceholder("ey-exec"); return; }
+    if (hash === "#/ey/engagements") { showModulePlaceholder("ey-eng"); return; }
+    // ----- Administração (placeholders; só Adm) -----
+    if (hash.startsWith("#/admin")) {
+      if (!canSeeAdmin()) { goOperacoes(); return; }
+      if (hash === "#/admin/usuarios") { showModulePlaceholder("adm-users"); return; }
+      if (hash === "#/admin/config")   { showModulePlaceholder("adm-cfg"); return; }
+      showModulePlaceholder("adm-cad"); return;  // #/admin e #/admin/cadastros
+    }
+    // ----- Tela inicial (splash de seleção de módulo) -----
+    showHome();
     return;
   }
   const pid = decodeURIComponent(m[1]);
   const sid = m[2] ? decodeURIComponent(m[2]) : null;
-  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .app")) {
+  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .lg-app")) {
     const projs = (App._projects && App._projects.length) ? App._projects : await store.listProjects();
     App._projects = projs;
     const proj = projs.find((x) => String(x.id) === pid);
@@ -432,15 +539,178 @@ async function applyRoute() {
   }
 }
 
+/* ============================ MODULE SHELL (3 módulos) ============================ */
+/* Ícones inline (stroke=currentColor). Itens apontam para rotas hash. */
+const IC = {
+  ey: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>',
+  ops: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
+  admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
+};
+/* ícones por item — SVG stroke 2, estilo Feather, coerentes entre si */
+const ITEM_IC = {
+  "ey-solic": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>',
+  "ey-exec": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+  "ey-eng": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+  "ops-proj": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
+  "adm-cad": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 14h6"/></svg>',
+  "adm-users": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  "adm-cfg": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+};
+/* título + caminho (breadcrumb) da página a partir do item ativo */
+function pageMetaOf(activeItem) {
+  const mod = moduleOfItem(activeItem);
+  return { title: labelOfItem(activeItem) || "—", crumb: mod ? mod.label : "" };
+}
+function moduleModel() {
+  const mods = [
+    { key: "ey", label: "Portal EY", icon: IC.ey, items: [
+      { key: "ey-solic", label: "Solicitações", route: "#/ey/solicitacoes" },
+      { key: "ey-exec",  label: "Executar coleta", route: "#/ey/executar" },
+      { key: "ey-eng",   label: "Engagements", route: "#/ey/engagements" },
+    ] },
+    { key: "ops", label: "Operações", icon: IC.ops, items: [
+      { key: "ops-proj", label: "Projetos", route: "#/operacoes" },
+    ] },
+  ];
+  if (canSeeAdmin()) {
+    mods.push({ key: "admin", label: "Administração", icon: IC.admin, items: [
+      { key: "adm-cad",   label: "Cadastros", route: "#/admin/cadastros" },
+      { key: "adm-users", label: "Usuários", route: "#/admin/usuarios" },
+      { key: "adm-cfg",   label: "Configurações", route: "#/admin/config" },
+    ] });
+  }
+  return mods;
+}
+/* qual grupo contém o item ativo (para destacar o ícone quando colapsado) */
+function moduleOfItem(itemKey) {
+  return moduleModel().find((m) => m.items.some((it) => it.key === itemKey)) || null;
+}
+function labelOfItem(itemKey) {
+  for (const m of moduleModel()) { const it = m.items.find((x) => x.key === itemKey); if (it) return it.label; }
+  return "";
+}
+
+/* Monta o shell do modelo (design-system_v2): .app > .sidebar + .main.
+   activeItem = key do item ativo (ex.: "ops-proj"). */
+function buildModuleShell(activeItem) {
+  const mods = moduleModel();
+
+  // menu (flat, com rótulo por módulo) — estrutura do modelo
+  const menu = h("nav", { class: "menu", id: "sidebarMenu", "aria-label": "Módulos" },
+    h("span", { class: "menu-indicator", id: "sidebarIndicator", "aria-hidden": "true" }));
+  mods.forEach((m) => {
+    menu.appendChild(h("div", { class: "menu-group" }, m.label));
+    m.items.forEach((it) => {
+      const on = it.key === activeItem;
+      const a = h("a", on ? { href: it.route, class: "active", "aria-current": "page" } : { href: it.route });
+      a.innerHTML = (ITEM_IC[it.key] || "") + '<span class="menu-label">' + escapeHtml(it.label) + "</span>";
+      menu.appendChild(a);
+    });
+  });
+
+  // rodapé com o usuário (menu do modelo)
+  const p = App.profile || {};
+  const userMenu = h("div", { class: "sidebar-user-menu", id: "sidebarUserMenu", role: "menu" },
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); editDisplayName(); } }, "Editar nome…"),
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); changeMyPhoto(); } }, "Trocar foto…"),
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); supabase.auth.signOut(); } }, "Sair"));
+  const trigger = h("button", { class: "sidebar-trigger", id: "sidebarUserTrigger", type: "button", "aria-expanded": "false", "aria-controls": "sidebarUserMenu" },
+    h("span", { class: "sidebar-avatar" }, initials(p.display_name || p.full_name || "?")),
+    h("span", { class: "sidebar-user-info" }, h("strong", {}, p.display_name || p.full_name || "Usuário"), h("span", {}, roleLabel())),
+    h("span", { class: "sidebar-chevron", id: "sidebarChevron", "aria-hidden": "true",
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>' }));
+
+  const sidebar = h("aside", { class: "sidebar", id: "sidebar", "aria-label": "Navegação principal" },
+    h("span", { class: "sidebar-lights", "aria-hidden": "true" }),
+    h("div", { class: "brand" },
+      h("img", { class: "brand-mascot", src: "modelos/mascote_projetos_inovacao/ivy_figurinhas/ivy_programando.png", alt: "Ivy" }),
+      h("img", { class: "brand-logo-full", src: "app_planejamento_logo.png", alt: "Grupo Equatorial — Planejamento", "aria-hidden": "true" })),
+    menu,
+    h("div", { class: "sidebar-foot" }, userMenu, trigger));
+
+  // main: topbar (busca) + page-row (título/breadcrumb) + content
+  const meta = pageMetaOf(activeItem);
+  const search = h("div", { class: "search" });
+  search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>';
+  search.appendChild(h("input", { type: "search", placeholder: "Buscar…", onfocus: () => openGlobalSearch() }));
+  const topbar = h("div", { class: "topbar" }, search);
+  const pageRow = h("div", { class: "page-row" },
+    h("h1", { id: "page-title" }, meta.title),
+    h("div", { class: "crumb", id: "page-crumb" }, meta.crumb));
+  const content = h("div", { class: "content", id: "mod-content" });
+  const main = h("main", { class: "main" }, topbar, pageRow, content);
+
+  // toggle de tema do modelo (flutuante)
+  const themeBtn = h("button", { class: "theme-toggle", title: "Alternar tema", onClick: () => window.toggleTheme && window.toggleTheme() });
+  themeBtn.innerHTML = '<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>';
+
+  return h("div", { class: "app" }, themeBtn, sidebar, main);
+}
+
+/* Garante que o module shell está montado em #app-root com o item ativo certo,
+   e devolve o slot #mod-content (limpo) para a tela preencher. */
+function mountModuleShell(activeItem) {
+  $("#auth-root").hidden = true;
+  const root = $("#app-root"); root.hidden = false;
+  const cur = root.querySelector(".app");
+  if (!cur || !cur.querySelector("#sidebarMenu")) {
+    clear(root);
+    root.appendChild(buildModuleShell(activeItem));
+    if (window.setupSidebar) window.setupSidebar();
+  } else {
+    // atualiza ativo + título sem recriar o shell
+    const lbl = labelOfItem(activeItem);
+    cur.querySelectorAll("#sidebarMenu a").forEach((a) => {
+      const on = (a.querySelector(".menu-label") || {}).textContent === lbl;
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    const meta = pageMetaOf(activeItem);
+    const t = cur.querySelector("#page-title"); if (t) t.textContent = meta.title;
+    const c = cur.querySelector("#page-crumb"); if (c) c.textContent = meta.crumb;
+  }
+  const slot = document.getElementById("mod-content");
+  clear(slot);
+  return slot;
+}
+
+/* Tela genérica "em construção" dentro do slot do module shell.
+   opts = { kicker, title, desc, tabs? } */
+function renderPlaceholder(slot, opts) {
+  const body = h("div", { class: "card-body" });
+  body.appendChild(h("p", { class: "muted", style: { marginTop: 0 } }, opts.desc || ""));
+  if (opts.tabs && opts.tabs.length) {
+    const tabs = h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", margin: "12px 0" } });
+    opts.tabs.forEach((t) => tabs.appendChild(h("span", { class: "badge member" }, t)));
+    body.appendChild(tabs);
+  }
+  body.appendChild(h("p", { class: "muted" }, "Em desenvolvimento. Esta seção será disponibilizada em breve."));
+  slot.appendChild(h("div", { class: "card" }, body));
+}
+
+/* Telas-placeholder por item de módulo. */
+function showModulePlaceholder(itemKey) {
+  const slot = mountModuleShell(itemKey);
+  const P = {
+    "ey-solic":  { kicker: "Portal EY", title: "Solicitações", desc: "Triagem das solicitações do relatório EY, com Área e Responsável." },
+    "ey-exec":   { kicker: "Portal EY", title: "Executar coleta", desc: "Disparo da coleta do relatório EY (sync incremental)." },
+    "ey-eng":    { kicker: "Portal EY", title: "Engagements", desc: "Catálogo de engagements EY e seus grupos." },
+    "adm-cad":   { kicker: "Administração", title: "Cadastros", desc: "Entidades do processo. Cada uma será uma aba.", tabs: ["Pessoas", "Áreas", "Unidades", "Lista de status"] },
+    "adm-users": { kicker: "Administração", title: "Usuários", desc: "Permissões de acesso (Adm · Operador · Visitante) e allowlist de e-mails." },
+    "adm-cfg":   { kicker: "Administração", title: "Configurações", desc: "Ajustes gerais da aplicação." },
+  };
+  renderPlaceholder(slot, P[itemKey] || { kicker: "", title: "Em construção", desc: "" });
+}
+
 function buildShell() {
   // ---- Sidebar ----
   const sheetList = h("div", { class: "sheet-list", id: "sheet-list" });
-  const sidebar = h("aside", { class: "sidebar" },
+  const sidebar = h("aside", { class: "lg-sidebar" },
     h("div", { class: "brand" },
       h("img", { class: "brand-logo", src: "app_planejamento_logo.png", alt: "App Planejamento" }),
       h("div", { class: "brand-proj", id: "brand-proj" }, App.project ? App.project.name : "")),
     h("div", { class: "side-nav" },
-      h("button", { class: "side-nav-item nav-others", onClick: goProjects }, "↩ Outros projetos"),
+      h("button", { class: "side-nav-item nav-others", onClick: goOperacoes }, "↩ Operações"),
       h("button", { class: "side-nav-item nav-dash", id: "nav-dashboard", onClick: () => goProject(App.project.id) },
         h("span", { class: "nav-ic", html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.6"/><rect x="13" y="10" width="8" height="11" rx="1.6"/><rect x="3" y="13" width="8" height="8" rx="1.6"/></svg>' }),
         h("span", {}, "Dashboard")),
@@ -470,7 +740,7 @@ function buildShell() {
   const collapseBtn = h("button", { class: "collapse-btn", title: "Recolher/expandir menu", onClick: toggleSidebar }, "☰");
   const crumb = h("div", { class: "crumb", id: "crumb" }, "—");
   const presence = h("div", { class: "presence", id: "presence" });
-  const topbar = h("header", { class: "topbar" }, collapseBtn, crumb, presence, userChipEl());
+  const topbar = h("header", { class: "lg-topbar" }, collapseBtn, crumb, presence, userChipEl());
 
   // ---- Toolbar ----
   const toolbar = buildToolbar();
@@ -497,7 +767,7 @@ function buildShell() {
       h("span", { id: "zoom-label", class: "zoom-label", title: "Redefinir para 100%", onClick: () => setZoom(100) }, App.zoom + "%")));
 
   const workspace = h("div", { class: "workspace" }, topbar, toolbar, gridScroll, statusbar);
-  return h("div", { class: "app" }, sidebar, workspace);
+  return h("div", { class: "lg-app" }, sidebar, workspace);
 }
 
 /* ============================ TOOLBAR ============================ */
@@ -643,8 +913,7 @@ function sheetInfo(s) {
   return App.sheetIndex.get(String(s.name || "").trim()) || null;
 }
 function sheetAreaText(s) { const i = sheetInfo(s); return i && i.areas.length ? i.areas.join(" · ") : ""; }
-/* a aba índice "Solicitações" agora vira a tela-tabela; sai da lista de abas
-   (fica acessível pelo item do menu e pelo link "ver original"). */
+/* a aba índice "Solicitações" virou a tela-tabela: some da lista de abas */
 function isSolicIndex(s) { return !!(s && s.kind === "index" && /solicita/i.test(s.name)); }
 function solicIndexSheet() { return App.sheets.find(isSolicIndex) || null; }
 function openOriginalSolic() { const s = solicIndexSheet(); if (s) goSheet(App.project.id, s.id); else toast("Aba original não encontrada."); }
@@ -1101,7 +1370,7 @@ function setRtStatus(on, label) {
   el.querySelector("span:last-child").textContent = label;
 }
 function toggleSidebar() {
-  document.querySelector(".app")?.classList.toggle("sidebar-collapsed");
+  document.querySelector(".lg-app")?.classList.toggle("sidebar-collapsed");
 }
 
 /* presenca no topbar: todos os usuários centralizados (online verde / offline cinza) */
@@ -1306,6 +1575,7 @@ function openUserMenu(e) {
   if (isAdmin()) {
     m.appendChild(h("div", { class: "sep" }));
     item("Importar / atualizar do Excel (.xlsx)…", openExcelImport);
+    item("Importar da EY (colar JSON)…", openEyImport);
     item("Importar seed (.json) — avançado…", openImport);
   }
   m.appendChild(h("div", { class: "sep" }));
@@ -1351,6 +1621,48 @@ function openImport() {
     if (first) selectSheet(first);
   };
   input.click();
+}
+
+/* ============================ IMPORTAR DA EY (JSON do portal) ============================ */
+/* Recebe o JSON gerado pelo snippet do EY Canvas Client Portal (ver
+   tools/ey_export_snippet.js) e faz upsert na tabela ey_requests. Sem arquivo e
+   sem diálogo "salvar como": o snippet copia o JSON; aqui a gente cola. */
+function openEyImport() {
+  const info = h("p", { class: "muted", style: { margin: "0 0 8px", lineHeight: "1.45" } },
+    "Com o portal EY aberto, rode o snippet (ou clique no favorito). Ele copia o JSON das solicitações. ",
+    h("b", {}, "Cole abaixo"), " e importe — vai para a tabela ", h("code", {}, "ey_requests"), " (não mexe na grade).");
+  const ta = h("textarea", {
+    rows: 8, spellcheck: "false", placeholder: "Cole aqui o JSON copiado pelo snippet…",
+    style: { width: "100%", boxSizing: "border-box", fontFamily: "monospace", fontSize: "12px",
+             padding: "8px", border: "1px solid var(--border, #ccc)", borderRadius: "8px", resize: "vertical" },
+  });
+  const status = h("p", { class: "muted", style: { margin: "8px 0 0", minHeight: "18px" } }, "");
+  const pasteBtn = h("button", { class: "btn btn-ghost btn-sm", onClick: async () => {
+    try { ta.value = await navigator.clipboard.readText(); status.textContent = "Colado da área de transferência."; }
+    catch (e) { status.textContent = "Não consegui ler a área de transferência — cole manualmente (Ctrl+V)."; }
+  } }, "📋 Colar da área de transferência");
+  const body = h("div", {}, info, h("div", { style: { margin: "0 0 8px" } }, pasteBtn), ta, status);
+
+  openModal("Importar da EY", body, [
+    { label: "Fechar" },
+    { label: "Importar", primary: true, onClick: async () => {
+      let payload;
+      try { payload = JSON.parse((ta.value || "").trim()); }
+      catch (e) { return toast("JSON inválido: " + e.message, "err"); }
+      const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : null);
+      if (!rows || !rows.length) return toast("Nenhuma solicitação encontrada no JSON.", "err");
+      if (rows[0].client_request_id == null) return toast("Formato inesperado (faltou client_request_id). Use o snippet oficial.", "err");
+      status.textContent = "Importando…";
+      try {
+        const { upserted } = await store.upsertEyRequests(rows, (m) => { status.textContent = m; });
+        const byG = {};
+        for (const r of rows) { const g = r.group_name || "(sem grupo)"; byG[g] = (byG[g] || 0) + 1; }
+        const resumo = Object.entries(byG).sort((a, b) => a[0].localeCompare(b[0])).map(([g, n]) => `${g}: ${n}`).join(" · ");
+        toast(`Importadas ${upserted} solicitações da EY.`);
+        status.textContent = "✅ " + upserted + " solicitações · " + resumo;
+      } catch (e) { toast("Erro ao importar: " + e.message, "err"); status.textContent = "Falhou: " + e.message; }
+    } },
+  ]);
 }
 
 /* ============================ EXPORTAR EXCEL ============================ */
@@ -1557,7 +1869,6 @@ function showDiffModal(results, novas = []) {
 
     // 2) abas existentes: alterações (geram histórico)
     apply.textContent = "Aplicando…";
-    const sheetMaxDims = new Map();
     for (const x of sel) {
       const ex = x.curMap.get(x.ch.row + ":" + x.ch.col);
       const imp = x.fmtMap && x.fmtMap.get(x.ch.row + ":" + x.ch.col);
@@ -1565,17 +1876,6 @@ function showDiffModal(results, novas = []) {
       const dtype = (ex && ex.data_type === "status") || isStatusVal(x.ch.neu) ? "status" : (ex ? ex.data_type : "text");
       await store.saveCell(x.sheet.id, x.ch.row, x.ch.col, { value: x.ch.neu, data_type: dtype, format: fmt });
       touched.add(x.sheet.id);
-      const d = sheetMaxDims.get(x.sheet.id) || { maxR: 0, maxC: 0, sheet: x.sheet };
-      d.maxR = Math.max(d.maxR, x.ch.row);
-      d.maxC = Math.max(d.maxC, x.ch.col);
-      sheetMaxDims.set(x.sheet.id, d);
-    }
-    // Expande row_count/col_count se o Excel trouxe dados além dos limites atuais
-    for (const [sheetId, d] of sheetMaxDims) {
-      const patch = {};
-      if (d.maxR > d.sheet.row_count) patch.row_count = d.maxR + 20;
-      if (d.maxC > d.sheet.col_count) patch.col_count = d.maxC + 4;
-      if (Object.keys(patch).length) await store.updateSheet(sheetId, patch);
     }
     scrim.remove();
 
@@ -1798,13 +2098,104 @@ async function openListManager() {
   }
 
   const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
-  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Lista de Status"), body, foot);
+  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Gerenciar lista"), body, foot);
   scrim.appendChild(modal);
   scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
   document.body.appendChild(scrim);
 }
 
-/* ---- Lista de Empresas ---- */
+function buildConverter(opts) {
+  const card = h("div", { class: "lm-card" });
+  const findInput = h("input", { class: "input", placeholder: "Texto exato a procurar (ex.: NA)" });
+  const targetSel = h("select", { class: "input" }, ...opts.map((o) => h("option", { value: o.label }, o.label)));
+  const findBtn = h("button", { class: "btn", onClick: () => doFind() }, "Procurar");
+  const previewBox = h("div", { class: "lm-preview" });
+  const applyBtn = h("button", { class: "btn btn-primary", disabled: true, onClick: () => doApply() }, "Substituir selecionadas");
+  const allCb = h("input", { type: "checkbox", checked: true });
+  const allRow = h("label", { class: "lm-allrow", hidden: true }, allCb, h("span", {}, "Marcar / desmarcar todas"));
+  let checks = [];
+  const leftStr = (rec) => { const v = rec && rec.value != null ? String(rec.value) : ""; return v === "" ? "·" : v; };
+
+  async function doFind() {
+    const text = findInput.value;   // EXATO (sem trim)
+    clear(previewBox); checks = []; applyBtn.disabled = true; allRow.hidden = true;
+    if (!text) { previewBox.appendChild(h("p", { class: "muted" }, "Digite o texto exato a procurar.")); return; }
+    previewBox.appendChild(h("div", { class: "spinner", style: { margin: "20px auto" } }));
+    let rows;
+    try { rows = await store.searchCellsExact(text, App.sheets.map((s) => s.id)); }
+    catch (e) { clear(previewBox); previewBox.appendChild(h("p", { class: "muted" }, "Erro na busca: " + e.message)); return; }
+    const byId = new Map(App.sheets.map((s) => [String(s.id), s]));
+    const groups = new Map();
+    for (const r of rows) { const sid = String(r.sheet_id); if (!byId.has(sid)) continue; if (!groups.has(sid)) groups.set(sid, []); groups.get(sid).push(r); }
+    clear(previewBox);
+    if (!groups.size) { previewBox.appendChild(h("p", { class: "muted" }, `Nenhuma célula com exatamente “${text}”.`)); return; }
+    const total = [...groups.values()].reduce((n, a) => n + a.length, 0);
+    allRow.hidden = false;
+    previewBox.appendChild(h("div", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } },
+      `${total} célula(s) em ${groups.size} aba(s). Confira a posição (coluna à esquerda e à direita) antes de aplicar.`));
+    const sids = [...groups.keys()].sort((a, b) => natCompare(byId.get(a).name, byId.get(b).name));
+    for (const sid of sids) {
+      const s = byId.get(sid);
+      const matches = groups.get(sid).sort((a, b) => a.row - b.row || a.col - b.col);
+      let cmap;
+      try { const cells = await store.loadCells(sid); cmap = new Map(cells.map((c) => [c.row + ":" + c.col, c])); }
+      catch (_) { cmap = new Map(); }
+      const sec = h("div", { class: "lm-pv-group" });
+      sec.appendChild(h("div", { class: "lm-pv-h" }, h("span", { class: "gs-sheet" }, s.name),
+        sheetAreaText(s) ? h("span", { class: "gs-area" }, sheetAreaText(s)) : null,
+        h("span", { class: "gs-count" }, String(matches.length))));
+      matches.forEach((m) => {
+        const cb = h("input", { type: "checkbox", checked: true });
+        checks.push({ sid, row: m.row, col: m.col, cb, fmt: (cmap.get(m.row + ":" + m.col) || {}).format || {} });
+        sec.appendChild(h("div", { class: "lm-pv-row" }, cb,
+          h("span", { class: "lm-ref" }, colName(m.col) + m.row),
+          h("span", { class: "lm-side", title: "coluna à esquerda" }, leftStr(cmap.get(m.row + ":" + (m.col - 1)))),
+          h("span", { class: "lm-mid" }, m.value),
+          h("span", { class: "lm-side", title: "coluna à direita" }, leftStr(cmap.get(m.row + ":" + (m.col + 1))))));
+      });
+      previewBox.appendChild(sec);
+    }
+    applyBtn.disabled = false;
+    allCb.checked = true;
+    allCb.onchange = () => { checks.forEach((x) => { x.cb.checked = allCb.checked; }); };
+  }
+
+  async function doApply() {
+    const target = targetSel.value;
+    if (!target) return toast("Crie ao menos um item na lista.");
+    const sel = checks.filter((x) => x.cb.checked);
+    if (!sel.length) return toast("Selecione ao menos uma célula.");
+    if (!(await confirmModal("Confirmar substituição", `Trocar ${sel.length} célula(s) por “${target}” e transformar em lista (dropdown)? Gera histórico e pode ser desfeito célula a célula.`))) return;
+    applyBtn.disabled = true; applyBtn.textContent = "Aplicando…";
+    let n = 0; const touched = new Set();
+    for (const x of sel) {
+      try { await store.saveCell(x.sid, x.row, x.col, { value: target, data_type: "status", format: x.fmt }); n++; touched.add(x.sid); }
+      catch (_) {}
+    }
+    touched.forEach((id) => bumpActivity(id));
+    toast(`${n} célula(s) substituída(s).`);
+    applyBtn.textContent = "Substituir selecionadas";
+    if (App.sheet && touched.has(String(App.sheet.id))) await reloadCurrent();
+    doFind();   // o texto antigo já não existe: atualiza o preview
+  }
+
+  card.appendChild(h("h4", {}, "Converter texto em item da lista"));
+  card.appendChild(h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } },
+    "Procura em TODAS as abas as células com o texto exato (diferencia maiúscula/minúscula, acento e pontuação) e troca pelo item escolhido, virando célula de lista (dropdown)."));
+  card.appendChild(h("div", { class: "lm-conv-ctrls" },
+    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Texto na célula"), findInput),
+    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Vira o item"), targetSel),
+    findBtn));
+  card.appendChild(allRow);
+  card.appendChild(previewBox);
+  card.appendChild(h("div", { class: "lm-apply" }, applyBtn));
+  return card;
+}
+
+/* ============================ GO ============================ */
+boot();
+
+/* ===== Empresas / Áreas / Parser / Solicitações (port da Fase 1-3) ===== */
 async function openCompaniesManager() {
   let list = [], missing = false;
   try { list = await store.loadCompanies(); } catch (_) { missing = true; }
@@ -1973,95 +2364,6 @@ function pcRow(s, res, perStatus) {
     res.records.length ? chips : null);
 }
 
-function buildConverter(opts) {
-  const card = h("div", { class: "lm-card" });
-  const findInput = h("input", { class: "input", placeholder: "Texto exato a procurar (ex.: NA)" });
-  const targetSel = h("select", { class: "input" }, ...opts.map((o) => h("option", { value: o.label }, o.label)));
-  const findBtn = h("button", { class: "btn", onClick: () => doFind() }, "Procurar");
-  const previewBox = h("div", { class: "lm-preview" });
-  const applyBtn = h("button", { class: "btn btn-primary", disabled: true, onClick: () => doApply() }, "Substituir selecionadas");
-  const allCb = h("input", { type: "checkbox", checked: true });
-  const allRow = h("label", { class: "lm-allrow", hidden: true }, allCb, h("span", {}, "Marcar / desmarcar todas"));
-  let checks = [];
-  const leftStr = (rec) => { const v = rec && rec.value != null ? String(rec.value) : ""; return v === "" ? "·" : v; };
-
-  async function doFind() {
-    const text = findInput.value;   // EXATO (sem trim)
-    clear(previewBox); checks = []; applyBtn.disabled = true; allRow.hidden = true;
-    if (!text) { previewBox.appendChild(h("p", { class: "muted" }, "Digite o texto exato a procurar.")); return; }
-    previewBox.appendChild(h("div", { class: "spinner", style: { margin: "20px auto" } }));
-    let rows;
-    try { rows = await store.searchCellsExact(text, App.sheets.map((s) => s.id)); }
-    catch (e) { clear(previewBox); previewBox.appendChild(h("p", { class: "muted" }, "Erro na busca: " + e.message)); return; }
-    const byId = new Map(App.sheets.map((s) => [String(s.id), s]));
-    const groups = new Map();
-    for (const r of rows) { const sid = String(r.sheet_id); if (!byId.has(sid)) continue; if (!groups.has(sid)) groups.set(sid, []); groups.get(sid).push(r); }
-    clear(previewBox);
-    if (!groups.size) { previewBox.appendChild(h("p", { class: "muted" }, `Nenhuma célula com exatamente “${text}”.`)); return; }
-    const total = [...groups.values()].reduce((n, a) => n + a.length, 0);
-    allRow.hidden = false;
-    previewBox.appendChild(h("div", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } },
-      `${total} célula(s) em ${groups.size} aba(s). Confira a posição (coluna à esquerda e à direita) antes de aplicar.`));
-    const sids = [...groups.keys()].sort((a, b) => natCompare(byId.get(a).name, byId.get(b).name));
-    for (const sid of sids) {
-      const s = byId.get(sid);
-      const matches = groups.get(sid).sort((a, b) => a.row - b.row || a.col - b.col);
-      let cmap;
-      try { const cells = await store.loadCells(sid); cmap = new Map(cells.map((c) => [c.row + ":" + c.col, c])); }
-      catch (_) { cmap = new Map(); }
-      const sec = h("div", { class: "lm-pv-group" });
-      sec.appendChild(h("div", { class: "lm-pv-h" }, h("span", { class: "gs-sheet" }, s.name),
-        sheetAreaText(s) ? h("span", { class: "gs-area" }, sheetAreaText(s)) : null,
-        h("span", { class: "gs-count" }, String(matches.length))));
-      matches.forEach((m) => {
-        const cb = h("input", { type: "checkbox", checked: true });
-        checks.push({ sid, row: m.row, col: m.col, cb, fmt: (cmap.get(m.row + ":" + m.col) || {}).format || {} });
-        sec.appendChild(h("div", { class: "lm-pv-row" }, cb,
-          h("span", { class: "lm-ref" }, colName(m.col) + m.row),
-          h("span", { class: "lm-side", title: "coluna à esquerda" }, leftStr(cmap.get(m.row + ":" + (m.col - 1)))),
-          h("span", { class: "lm-mid" }, m.value),
-          h("span", { class: "lm-side", title: "coluna à direita" }, leftStr(cmap.get(m.row + ":" + (m.col + 1))))));
-      });
-      previewBox.appendChild(sec);
-    }
-    applyBtn.disabled = false;
-    allCb.checked = true;
-    allCb.onchange = () => { checks.forEach((x) => { x.cb.checked = allCb.checked; }); };
-  }
-
-  async function doApply() {
-    const target = targetSel.value;
-    if (!target) return toast("Crie ao menos um item na lista.");
-    const sel = checks.filter((x) => x.cb.checked);
-    if (!sel.length) return toast("Selecione ao menos uma célula.");
-    if (!(await confirmModal("Confirmar substituição", `Trocar ${sel.length} célula(s) por “${target}” e transformar em lista (dropdown)? Gera histórico e pode ser desfeito célula a célula.`))) return;
-    applyBtn.disabled = true; applyBtn.textContent = "Aplicando…";
-    let n = 0; const touched = new Set();
-    for (const x of sel) {
-      try { await store.saveCell(x.sid, x.row, x.col, { value: target, data_type: "status", format: x.fmt }); n++; touched.add(x.sid); }
-      catch (_) {}
-    }
-    touched.forEach((id) => bumpActivity(id));
-    toast(`${n} célula(s) substituída(s).`);
-    applyBtn.textContent = "Substituir selecionadas";
-    if (App.sheet && touched.has(String(App.sheet.id))) await reloadCurrent();
-    doFind();   // o texto antigo já não existe: atualiza o preview
-  }
-
-  card.appendChild(h("h4", {}, "Converter texto em item da lista"));
-  card.appendChild(h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } },
-    "Procura em TODAS as abas as células com o texto exato (diferencia maiúscula/minúscula, acento e pontuação) e troca pelo item escolhido, virando célula de lista (dropdown)."));
-  card.appendChild(h("div", { class: "lm-conv-ctrls" },
-    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Texto na célula"), findInput),
-    h("div", { class: "field", style: { flex: "1", marginBottom: "0" } }, h("label", {}, "Vira o item"), targetSel),
-    findBtn));
-  card.appendChild(allRow);
-  card.appendChild(previewBox);
-  card.appendChild(h("div", { class: "lm-apply" }, applyBtn));
-  return card;
-}
-
-/* ---- Lista de Áreas ---- */
 async function openAreasManager() {
   let list = [], missing = false;
   try { list = await store.loadAreas(); } catch (_) { missing = true; }
@@ -2086,7 +2388,7 @@ async function openAreasManager() {
         try { await store.deleteArea(o.id); list = list.filter((x) => x.id !== o.id); render(); await reloadAreas(); }
         catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
       } }, "✕");
-      return h("div", { class: "lm-row" }, h("span", { class: "badge " + areaBadge(o.label) }, o.label), label, save, del);
+      return h("div", { class: "lm-row" }, h("span", { class: "badge" }, o.label), label, save, del);
     };
     const render = () => { clear(listBox); if (!list.length) listBox.appendChild(h("p", { class: "muted" }, "Nenhuma área ainda. São semeadas ao abrir a tela Solicitações, ou adicione aqui.")); list.forEach((o) => listBox.appendChild(row(o))); };
     render();
@@ -2105,26 +2407,6 @@ async function openAreasManager() {
   document.body.appendChild(scrim);
 }
 
-/* ============================ TELA-TABELA SOLICITAÇÕES ============================ */
-const BADGE_COLORS = ["blue", "green", "yellow", "orange", "purple", "teal", "gray"];
-function hashColor(s) { let n = 0; for (const ch of String(s || "")) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return BADGE_COLORS[n % BADGE_COLORS.length]; }
-function areaBadge(label) { return hashColor(label); }
-function solicHay(r) { return [(r.area || []).join(" "), r.scot, r.client_portal, r.data_solicitacao, r.deadline, r.sheet_link, r.area_eqtl, r.responsavel].join(" ").toLowerCase(); }
-function solicSave(row, patch) { Object.assign(row, patch); store.updateSolicitacao(row.id, patch).catch((e) => toast("Falha ao salvar: " + e.message, "err")); }
-
-function closePopover() { document.querySelector(".dd-pop")?.remove(); if (App._popClose) { document.removeEventListener("mousedown", App._popClose); App._popClose = null; } }
-function showPopover(pop, anchor) {
-  const r = anchor.getBoundingClientRect();
-  pop.style.position = "fixed";
-  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 290)) + "px";
-  pop.style.top = (r.bottom + 4) + "px";
-  document.body.appendChild(pop);
-  const close = (e) => { if (!pop.contains(e.target)) closePopover(); };
-  App._popClose = close;
-  setTimeout(() => document.addEventListener("mousedown", close), 0);
-}
-
-/* counts de status por aba, a partir do parser (cacheado em App._abaCounts) */
 async function computeAbaStatusCounts() {
   const out = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
   const m = new Map();
@@ -2213,150 +2495,3 @@ function solicMissingNotice() {
     h("p", { class: "muted", style: { margin: "8px 0 0" } }, "Rode "), h("code", {}, "sql/17_solicitacoes.sql"),
     h("span", { class: "muted" }, " no Supabase (SQL Editor) para habilitar a tela Solicitações."));
 }
-
-function renderSolicTable(wrap) {
-  clear(wrap);
-  const statuses = [...getStatusOptions()];
-  const search = h("input", { id: "solic-busca", type: "search", placeholder: "Buscar…", value: App._solicQuery || "",
-    oninput: (e) => { App._solicQuery = e.target.value; renderSolicBody(); } });
-  const count = h("span", { class: "count", id: "solic-count" }, "");
-  const bar = h("div", { class: "cmdbar" },
-    h("div", { class: "search" }, h("span", { class: "s-ic", html: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' }), search),
-    count,
-    h("div", { class: "spacer", style: { flex: 1 } }),
-    h("button", { class: "btn btn-light btn-sm", onClick: openOriginalSolic }, "Ver aba original"),
-    h("button", { class: "btn btn-light btn-sm", title: "Recalcular contagens (parser)", onClick: async () => { App._abaCounts = await computeAbaStatusCounts(); renderSolicBody(); toast("Contagens atualizadas."); } }, "↻ Status"),
-    h("button", { class: "btn btn-primary btn-sm", onClick: addSolicRow }, "＋ Linha"));
-
-  const tableWrap = h("div", { class: "table-wrap" });
-  const table = h("table", { class: "grade" });
-  const cg = h("colgroup");
-  [48, 220, 210, 240, 96, 96, 120, 160, 170].forEach((w) => cg.appendChild(h("col", { style: { width: w + "px" } })));
-  statuses.forEach(() => cg.appendChild(h("col", { style: { width: "66px" } })));
-  table.appendChild(cg);
-  const thLab = (t) => h("th", { class: "th-col" }, h("span", { class: "th-lab" }, t));
-  const trh = h("tr", {}, h("th", { class: "th-num" }, "#"),
-    thLab("Área"), thLab("Scot"), thLab("Client Portal"), thLab("Data"), thLab("Deadline"), thLab("Aba"), thLab("Área EQTL"), thLab("Responsável"));
-  statuses.forEach((st) => trh.appendChild(h("th", { class: "th-st" }, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st))));
-  table.appendChild(h("thead", {}, trh));
-  const tbody = h("tbody", { id: "solic-body" });
-  table.appendChild(tbody);
-  tableWrap.appendChild(table);
-  wrap.appendChild(bar);
-  wrap.appendChild(tableWrap);
-  App._solicTbody = tbody;
-  renderSolicBody();
-}
-
-function renderSolicBody() {
-  const tbody = App._solicTbody; if (!tbody) return;
-  clear(tbody);
-  const statuses = [...getStatusOptions()];
-  const q = (App._solicQuery || "").trim().toLowerCase();
-  let rows = App._solicRows || [];
-  if (q) rows = rows.filter((r) => solicHay(r).includes(q));
-  const cnt = $("#solic-count");
-  if (cnt) cnt.textContent = q ? `${rows.length} de ${(App._solicRows || []).length}` : `${(App._solicRows || []).length} registros`;
-  rows.forEach((r, i) => {
-    const tr = h("tr", {});
-    tr.appendChild(h("td", { class: "td-num" },
-      h("span", { class: "row-n" }, String(i + 1)),
-      h("button", { class: "row-del", title: "Excluir linha", onClick: (e) => { e.stopPropagation(); delSolicRow(r); } }, "✕")));
-    tr.appendChild(areaCell(r));
-    ["scot", "client_portal", "data_solicitacao", "deadline"].forEach((f) => tr.appendChild(textCell(r, f)));
-    tr.appendChild(abaCell(r));
-    ["area_eqtl", "responsavel"].forEach((f) => tr.appendChild(textCell(r, f)));
-    const link = String(r.sheet_link || "").trim();
-    const cmap = App._abaCounts ? App._abaCounts.get(link) : null;
-    statuses.forEach((st) => { const n = cmap ? (cmap.get(st) || 0) : 0; tr.appendChild(h("td", { class: "td-st" }, n ? String(n) : h("span", { class: "cell-empty" }, "·"))); });
-    tbody.appendChild(tr);
-  });
-  if (!rows.length) tbody.appendChild(h("tr", {}, h("td", { class: "sc-empty", colspan: String(9 + statuses.length) }, q ? "Nada encontrado." : "Sem solicitações.")));
-}
-
-function textCell(row, field) {
-  const td = h("td", { class: "sc-edit" });
-  const paint = () => { clear(td); if (row[field]) td.appendChild(document.createTextNode(row[field])); else td.appendChild(h("span", { class: "cell-empty" }, "—")); };
-  paint();
-  td.onclick = () => {
-    if (td.querySelector("input")) return;
-    const inp = h("input", { class: "sc-input", value: row[field] || "" });
-    clear(td); td.appendChild(inp); inp.focus(); inp.select();
-    let done = false;
-    const finish = (commit) => { if (done) return; done = true; if (commit && inp.value.trim() !== (row[field] || "")) solicSave(row, { [field]: inp.value.trim() }); paint(); };
-    inp.addEventListener("blur", () => finish(true));
-    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } else if (e.key === "Escape") { finish(false); } });
-  };
-  return td;
-}
-
-function areaCell(row) {
-  const td = h("td", { class: "sc-edit sc-area" });
-  const paint = () => {
-    clear(td);
-    const chips = h("div", { class: "cell-chips" });
-    (row.area || []).forEach((a) => chips.appendChild(h("span", { class: "badge " + areaBadge(a) }, a)));
-    if (!(row.area || []).length) chips.appendChild(h("span", { class: "cell-empty" }, "—"));
-    td.appendChild(chips);
-  };
-  paint();
-  td.onclick = (e) => { e.stopPropagation(); openAreaDropdown(td, row, paint); };
-  return td;
-}
-
-function openAreaDropdown(anchor, row, paint) {
-  closePopover();
-  const pop = h("div", { class: "dd-pop" });
-  const listEl = h("div", { class: "dd-list" });
-  const sel = new Set(row.area || []);
-  const labels = (App.areas || []).map((a) => a.label);
-  (row.area || []).forEach((a) => { if (!labels.includes(a)) labels.push(a); });
-  const checks = [];
-  const addOpt = (label, checked) => { const cb = h("input", { type: "checkbox", checked: checked }); checks.push({ cb, label }); listEl.appendChild(h("label", { class: "dd-opt" }, cb, h("span", { class: "badge " + areaBadge(label) }, label))); };
-  labels.forEach((l) => addOpt(l, sel.has(l)));
-  const newInp = h("input", { class: "sc-input", placeholder: "+ nova área" });
-  const addNew = h("button", { class: "btn btn-light btn-sm", onClick: async () => {
-    const v = newInp.value.trim(); if (!v) return;
-    try { await store.addAreas([v]); await reloadAreas(); } catch (_) {}
-    addOpt(v, true); newInp.value = "";
-  } }, "Adicionar");
-  const apply = h("button", { class: "btn btn-primary btn-sm", onClick: () => { solicSave(row, { area: checks.filter((x) => x.cb.checked).map((x) => x.label) }); paint(); closePopover(); } }, "Pronto");
-  pop.appendChild(listEl);
-  pop.appendChild(h("div", { class: "dd-foot" }, newInp, addNew, apply));
-  showPopover(pop, anchor);
-}
-
-function abaCell(row) {
-  const td = h("td", { class: "sc-edit sc-aba" });
-  if (row.sheet_link) td.appendChild(h("span", { class: "badge " + hashColor(row.sheet_link) }, row.sheet_link));
-  else td.appendChild(h("span", { class: "cell-empty" }, "—"));
-  td.onclick = (e) => { e.stopPropagation(); openAbaDropdown(td, row); };
-  return td;
-}
-
-function openAbaDropdown(anchor, row) {
-  closePopover();
-  const pop = h("div", { class: "dd-pop" });
-  const listEl = h("div", { class: "dd-list" });
-  const pick = (name) => { solicSave(row, { sheet_link: name }); closePopover(); renderSolicBody(); };
-  listEl.appendChild(h("button", { class: "dd-opt", onClick: () => pick("") }, h("span", { class: "muted" }, "— sem aba —")));
-  App.sheets.filter((s) => !isSolicIndex(s)).forEach((s) => {
-    listEl.appendChild(h("button", { class: "dd-opt" + (row.sheet_link === s.name ? " on" : ""), onClick: () => pick(s.name) },
-      h("span", {}, s.name), sheetAreaText(s) ? h("span", { class: "dd-sub" }, sheetAreaText(s)) : null));
-  });
-  pop.appendChild(listEl);
-  showPopover(pop, anchor);
-}
-
-async function addSolicRow() {
-  try { const row = await store.insertSolicitacao({ area: [], position: (App._solicRows ? App._solicRows.length : 0) + 1 }, App.project); App._solicRows.push(row); renderSolicBody(); }
-  catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
-}
-async function delSolicRow(r) {
-  if (!(await confirmModal("Excluir linha", "Excluir esta linha da tabela Solicitações? (não afeta a aba original)"))) return;
-  try { await store.deleteSolicitacao(r.id); App._solicRows = App._solicRows.filter((x) => x.id !== r.id); renderSolicBody(); }
-  catch (e) { toast("Erro ao excluir: " + (e.message || e), "err"); }
-}
-
-/* ============================ GO ============================ */
-boot();

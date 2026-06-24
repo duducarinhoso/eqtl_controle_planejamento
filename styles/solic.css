@@ -404,3 +404,64 @@ body.grade-view #conteudo { display:flex; flex-direction:column; overflow:hidden
 .gp-root .aba-eye { background: none; border: none; cursor: pointer; color: var(--accent-deep, #0b6f8a); padding: 0 2px; margin-left: 6px; display: inline-flex; vertical-align: middle; opacity: .8; }
 .gp-root .aba-eye:hover { opacity: 1; }
 .gp-root .sc-aba { display: flex; align-items: center; }
+
+/* =====================================================================
+   RETEMATIZAÇÃO DS v2 (teal/Roboto, dark+light). Mapeia as vars internas
+   do .gp-root para os tokens do design-system.css (theme-aware) e troca o
+   cabeçalho navy pelo gradiente teal do DS v2.
+   ===================================================================== */
+.gp-root {
+  --font: 'Roboto', system-ui, -apple-system, sans-serif;
+  --bg: inherit; --text: inherit;
+  --panel: var(--card-bg); --text-2: var(--text-muted); --muted: var(--text-muted);
+  --line: var(--border); --line-2: var(--divider);
+  --primary: var(--blue); --primary-2: var(--blue2); --primary-lt: var(--hover);
+  --accent: var(--blue); --accent-deep: var(--green); --gold: var(--green);
+}
+.gp-root, .gp-root.grade-view { font-family: var(--font); background: var(--bg); color: var(--text); }
+
+/* superfícies da grade */
+.gp-root .table-wrap { background: var(--card-bg); border-color: var(--border); box-shadow: var(--shadow); }
+.gp-root table.grade { background: var(--card-bg); }
+.gp-root table.grade td { color: var(--text); border-bottom-color: var(--grid-line); }
+.gp-root table.grade tbody tr:hover td { background: var(--hover); }
+.gp-root table.grade td.sticky-sel, .gp-root table.grade td.sticky-num, .gp-root table.grade td.sticky-col,
+.gp-root table.grade td.td-num, .gp-root table.grade td.td-sel { background: var(--card-bg); }
+.gp-root table.grade tbody tr:hover td.sticky-sel, .gp-root table.grade tbody tr:hover td.sticky-num,
+.gp-root table.grade tbody tr:hover td.sticky-col, .gp-root table.grade tbody tr:hover td.td-num { background: var(--hover); }
+.gp-root .cell-title, .gp-root .prim-tit { color: var(--text); }
+.gp-root .cell-empty, .gp-root .muted, .gp-root .prim-sub, .gp-root .dd-sub { color: var(--text-dim); }
+
+/* cabeçalho teal (substitui o navy do gerenciador) */
+.gp-root table.grade th { background: var(--sidebar-bg); color: #eaf3ef; border-bottom: 1px solid rgba(0,0,0,.22); }
+.gp-root .th-lab { color: #eaf3ef; }
+.gp-root .th-ic, .gp-root .th-funil, .gp-root .sort-ind { color: #9fe0cf; }
+.gp-root .th-menu { color: rgba(255,255,255,.85); }
+.gp-root .th-rotulo:hover, .gp-root .th-menu:hover { background: rgba(255,255,255,.10); }
+.gp-root .col-resize:hover { background: rgba(159,224,207,.5); }
+.gp-root table.grade th.col-filtro-ativo { box-shadow: inset 0 -2px 0 var(--green); }
+
+/* barra de comando / busca / contagem / botões */
+.gp-root .cmdbar .search, .gp-root .search { background: var(--input-bg); border-color: var(--input-border); color: var(--text-muted); }
+.gp-root .search input { color: var(--text); }
+.gp-root .count { background: var(--hover); color: var(--text-muted); }
+.gp-root .btn-light { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); }
+.gp-root .btn-light:hover { background: var(--hover); }
+.gp-root .btn-light.is-on { background: color-mix(in srgb, var(--blue) 14%, transparent); border-color: var(--blue); color: var(--blue); }
+.gp-root .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.gp-root .btn-primary:hover { background: var(--blue2); }
+.gp-root .badge-on { background: var(--blue); color: #fff; }
+
+/* tags (Área) — chip neutro theme-aware */
+.gp-root .badge { background: var(--hover); color: var(--text-muted); }
+.gp-root .aba-eye { color: var(--blue); }
+
+/* popovers / menus / modal de filtro / grupos */
+.gp-root .dd-pop, .gp-root .col-menu { background: var(--card-bg); border-color: var(--border); color: var(--text); box-shadow: var(--shadow); }
+.gp-root .dd-opt, .gp-root .cm-item { color: var(--text); }
+.gp-root .dd-opt:hover, .gp-root .cm-item:hover { background: var(--hover); }
+.gp-root .dd-opt.on { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.gp-root .gp-input, .gp-root .cm-input, .gp-root .sc-input { background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text); }
+.gp-root .cm-sep, .gp-root .dd-foot, .gp-root .cm-acts { border-color: var(--border); }
+.gp-root .grp-row td { background: var(--hover); color: var(--text); }
+.gp-root .bulkbar { background: var(--card-bg); border-color: var(--border); }
