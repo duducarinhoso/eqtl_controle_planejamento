@@ -58,13 +58,19 @@ Ver tabela completa em `Stack.md`. Resumo de prontidão:
 
 | Artefato | Conteúdo | Status |
 |---|---|---|
-| `styles/tokens.css` | tokens (cores, tipografia, espaçamento) — dark + light | ✅ no app |
-| `modelos/design-system.html` | DS v1 (azuis/cianos vibrantes) | 📦 superado pela v2 |
-| `modelos/design-system_v2.html` | DS v2 (teal/verde/navy institucional, fonte Outfit) | 🔨 refresh em andamento — paleta nova ainda não propagada a todos os componentes |
-| `modelos/00,tela_login.html` | mockup da tela de login | ✅ referência integrada em `auth.js` |
-| `modelos/01.tela_inicial_v2.html` | mockup da home (Auditoria + Cronograma) | ✅ referência implementada em `buildHome()` |
+| `modelos/design-system_v2.html` | **DS canônico** — teal/navy institucional, **Roboto**, dark+light via `data-theme` (a "casa") | ✅ fonte de verdade |
+| `styles/design-system.css` | CSS do DS v2 **verbatim** do modelo (classes + tokens + temas) | ✅ no app (canônico) |
+| `js/ds.js` | JS do DS v2 verbatim (charts/gauges/sparklines, `setupSidebar`, `toggleTheme`) | ✅ no app (canônico) |
+| `styles/app-ds.css` | elementos do app coerentes com o DS (`.menu-group`, botões, inputs, badges `.st-*`, modais/menus/toasts, marca) | ✅ no app |
+| `styles/app.css` | estilos **legados** — grade escopada em `.lg-*`; sai quando a grade migrar | 🔨 em retirada |
+| `styles/tokens.css` | tokens **legados** (navy/gold) — só p/ a grade legada e o semáforo `--status-*` | 🔨 em retirada |
+| `app_planejamento_logo.png` + `modelos/mascote_projetos_inovacao/ivy_figurinhas/ivy_programando.png` | logo (sidebar expandida) + mascote **Ivy** (sidebar colapsada) | ✅ no shell |
+| `modelos/00,tela_login.html` | mockup do login | ✅ em `auth.js` (alinhar ao DS v2 → I-0013) |
+| `modelos/01.tela_inicial_v2.html` | splash (Auditoria/Cronograma) | ✅ em `buildHome()` (Auditoria → `#/operacoes`) |
+| `modelos/design-system.html` | DS v1 | 📦 superado |
 
-> **Princípio (auto-memory `usar-modelos-do-usuario`):** usar exatamente os HTMLs de `modelos/` como fonte do design — não recriar do zero.
+> **Apagados nesta migração** (recriavam o que o modelo já tem): `styles/shell.css`, `styles/v2-tokens.css`, `styles/v2-kit.css`.
+> **Princípio:** usar o `design-system_v2.html` **por completo** — consultar e reusar o elemento pronto, não recriar. Ver auto-memory `usar-modelos-do-usuario` + `design-revisao-automatica` e o checklist Definition of Done em `Central.md` § 🎨 Painel de Design.
 
 ## 🛠️ Regras de negócio / lógica notável (no código)
 

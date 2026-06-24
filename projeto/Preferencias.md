@@ -22,6 +22,16 @@ tipo: preferencias
 - **Ajustes de UI literais — não inventar elementos.** Ao pedir um ajuste (redimensionar, mover, recolorir), fazer **só aquilo**; não adicionar cards/seções "pra aproveitar o espaço".
 - **Identidade institucional, sóbria e confiável** (PRODUCT.md). Anti-referência: SaaS genérico colorido/lúdico, glassmorphism decorativo espalhado, dashboards hero-metric. A ferramenta some na tarefa: densidade e clareza acima de espetáculo.
 
+### Disciplina de revisão de design (aplicar AUTOMÁTICO em toda mudança de UI) — *origem: revisão DS v2, 2026-06-24*
+O Eduardo cansou de retrabalho por eu ajustar elemento isolado sem consultar o modelo nem olhar a tela toda. Em cada mudança visual, sem precisar pedir (versão operacional = checklist em `Central.md` § 🎨 Painel de Design):
+- **Consultar o modelo COMPLETO primeiro.** Antes de criar/ajustar qualquer elemento, achar o equivalente (ou o mais próximo) em `design-system_v2.html` e seguir estrutura/tipografia/cor/espaçamento. **Não recriar** o que já existe (CSS, tokens, sidebar, botões, tema); **não desviar "no olho".**
+- **Revisão holística:** a cada screenshot, olhar a **tela inteira**, não só o que mudou — caçar incoerências, elementos fora do lugar, oportunidades.
+- **Cor com semântica e distinção:** escolher pela função/significado; estados **claramente distinguíveis**; reconciliar com cores já existentes (ex.: `STATUS_RAMP`). Nada de "colorir sem olhar o conteúdo".
+- **Coerência ícone↔rótulo** (errei com engrenagem no botão "Usuários").
+- **WCAG AA (≥4.5:1) em claro E escuro**, calculado; fonte branca exige fundo escuro o bastante; verificar nos dois temas no browser.
+- **Cross-review** em mudança significativa: ≥2 lentes/skills, **uma revisando o trabalho da outra**, antes de dar por pronto.
+- **Decisões de marca/conta (confirmadas):** sidebar colapsada mostra o **mascote** (`modelos/.../ivy_programando.png`) e expandida mostra a **logo** (`app_planejamento_logo.png`); menu de **conta único**, no **rodapé da sidebar** (não duplicar no topbar).
+
 ## Stack & arquitetura
 
 - **Vanilla JS, sem framework e sem build step, de propósito.** App servido como arquivos estáticos (GitHub Pages). Não introduzir Node/npm/bundler/framework sem decisão explícita.

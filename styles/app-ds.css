@@ -11,8 +11,8 @@ body{ background:var(--bg); color:var(--text); }
    Some quando a sidebar está colapsada (mesma lógica do .menu-label do modelo). */
 .menu-group{
   padding:14px 22px 5px; font-family:var(--font);
-  font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--text-dim); white-space:nowrap;
+  font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--side-text); white-space:nowrap;
   opacity:0; transform:translateX(-4px);
   transition:opacity .18s ease, transform .18s ease;
 }
@@ -38,9 +38,49 @@ body{ background:var(--bg); color:var(--text); }
   border-radius:5px; cursor:pointer; font-size:14px; line-height:1; }
 .card-act:hover{ background:var(--hover); color:var(--text); }
 
-/* badges de status (semáforo) sobre o .badge do modelo */
-.badge.st-recebido{ background:var(--status-green); color:#fff; }
-.badge.st-pendente{ background:var(--status-yellow); color:#3a2a00; }
-.badge.st-analise{ background:var(--status-blue); color:#fff; }
-.badge.st-parcial{ background:var(--status-orange); color:#fff; }
-.badge.st-na{ background:var(--text-dim); color:#fff; }
+/* badges de status — 5 matizes SEMÂNTICOS e DISTINTOS, alinhados às famílias do
+   heatmap (STATUS_RAMP): verde=concluído, âmbar=aguardando, teal=em andamento,
+   laranja=atenção, neutro=N/A. Fills sólidos suaves (não pastel) + pílula do modelo.
+   Contraste WCAG AA conferido (cross-review dudu). */
+.badge.st-recebido{ background:#2f7d4e; color:#ffffff; }   /* verde   · 5.0:1 */
+.badge.st-pendente{ background:#8a6914; color:#ffffff; }   /* âmbar   · 5.1:1 */
+.badge.st-analise{  background:#246b78; color:#ffffff; }   /* teal    · 6.1:1 */
+.badge.st-parcial{  background:#b85c2e; color:#ffffff; }   /* laranja · 4.8:1 */
+.badge.st-na{       background:transparent; color:var(--text-muted); box-shadow:inset 0 0 0 1px var(--border); } /* neutro */
+
+/* ---- completar o kit de botões (variantes que faltavam, em tokens do modelo) ---- */
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
+.btn-sm{ height:30px; padding:0 11px; font-size:12px; }
+.btn-icon{ width:36px; padding:0; justify-content:center; }
+.btn-danger{ background:var(--red); color:#fff; border-color:transparent; }
+.btn-danger:hover{ filter:brightness(.94); }
+
+/* ---- inputs/campos no estilo do modelo (o legado fixava #fff → quebrava no dark) ---- */
+.input{ height:36px; padding:0 12px; background:var(--input-bg); border:1px solid var(--input-border);
+  border-radius:var(--radius); color:var(--text); outline:none; font-family:var(--font); }
+.input:focus{ border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 22%, transparent); }
+textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
+.field label{ color:var(--text-muted); }
+
+/* ---- coerência da tela Projetos com o modelo ---- */
+.content .muted{ color:var(--text-muted); }
+.content .landing-body{ padding:0; }
+.content .landing-head{ align-items:center; margin-bottom:var(--gap); }
+.page-row h1{ text-transform:uppercase; }
+.topbar .user .u-name{ color:var(--text); }  /* --blue do modelo reprova no dark */
+
+/* marca da sidebar: mascote (Ivy) quando colapsada; logo completa quando expande */
+.brand .brand-mascot{ width:38px; height:38px; flex:none; object-fit:contain; transition:opacity .2s ease; }
+.brand .brand-logo-full{ position:absolute; left:15px; height:34px; max-width:185px; object-fit:contain; object-position:left center; opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.sidebar:hover .brand-mascot, .sidebar:focus-within .brand-mascot{ opacity:0; }
+.sidebar:hover .brand-logo-full, .sidebar:focus-within .brand-logo-full{ opacity:1; }
+
+/* ---- superfícies de modal/menu/toast no estilo do modelo (o legado fixava #fff → quebrava no dark) ---- */
+.modal{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+.ctx-menu{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+.ctx-menu button{ color:var(--text); }
+.ctx-menu button:hover{ background:var(--hover); }
+.ctx-menu .sep{ background:var(--border); }
+.ctx-menu button.danger{ color:var(--red); }
+.toast{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+.toast.err{ background:var(--red); color:#fff; border-color:transparent; }

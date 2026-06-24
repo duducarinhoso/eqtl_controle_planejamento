@@ -336,37 +336,33 @@ async function showProjects() {
    O rail já fornece marca e usuário, então dispensamos o chrome de tela cheia. */
 function buildLandingBody() {
   const grid = h("div", { class: "proj-grid", id: "proj-grid" });
+  const usersSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  const plusSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
   const head = h("div", { class: "landing-head" },
     h("p", { class: "muted", style: { margin: 0 } }, "Selecione um projeto para abrir ou crie um novo."),
     h("div", { class: "landing-actions" },
-      isAdmin() ? h("button", { class: "btn btn-ghost", onClick: openAdminPanel }, "⚙ Usuários") : null,
-      h("button", { class: "btn btn-primary", onClick: newProject }, "＋ Novo projeto")));
+      isAdmin() ? h("button", { class: "btn btn-ghost", onClick: openAdminPanel }, h("span", { html: usersSvg, style: { display: "inline-flex" } }), "Usuários") : null,
+      h("button", { class: "btn btn-primary", onClick: newProject }, h("span", { html: plusSvg, style: { display: "inline-flex" } }), "Novo projeto")));
   return h("div", { class: "landing-body" }, head, grid);
 }
 
-function buildLanding() {
-  const search = h("input", { class: "input proj-search", type: "search", placeholder: "Buscar projeto…",
-    oninput: (e) => renderProjectCards(App._projects || [], e.target.value) });
-  const grid = h("div", { class: "proj-grid", id: "proj-grid" });
-  const top = h("header", { class: "landing-top" },
-    h("img", { class: "landing-logo", src: "app_planejamento_logo.png", alt: "App Planejamento" }),
-    h("div", { class: "spacer", style: { flex: 1 } }),
-    isAdmin() ? h("button", { class: "landing-gear", title: "Administração de usuários", onClick: openAdminPanel }, "⚙") : null,
-    userChipEl());
-  const head = h("div", { class: "landing-head" },
-    h("div", {}, h("div", { class: "t-display" }, "Projetos"),
-      h("p", { class: "muted", style: { margin: "2px 0 0" } }, "Selecione um projeto para abrir ou crie um novo.")),
-    h("div", { class: "landing-actions" }, search,
-      h("button", { class: "btn btn-primary", onClick: newProject }, "＋ Novo projeto")));
-  return h("div", { class: "landing" }, top, h("div", { class: "landing-body" }, head, grid));
-}
+/* (buildLanding legada removida — era a landing full-screen com barra navy;
+   a tela Projetos agora vive no shell do modelo via buildLandingBody.) */
 
 async function loadLanding() {
   const grid = $("#proj-grid"); if (!grid) return;
   grid.innerHTML = '<div class="spinner" style="margin:48px auto"></div>';
   let projects, summary, lastch;
   try { [projects, summary, lastch] = await Promise.all([store.listProjects(), store.loadProjectsStatusSummary(), store.loadProjectsLastChange()]); }
-  catch (e) { clear(grid); grid.appendChild(h("p", { class: "muted" }, "Erro ao carregar: " + e.message)); return; }
+  catch (e) {
+    clear(grid);
+    grid.appendChild(h("div", { class: "card", style: { gridColumn: "1 / -1" } },
+      h("div", { class: "card-body" },
+        h("p", { style: { margin: "0 0 8px", color: "var(--red)", fontWeight: 600 } }, "Não foi possível carregar os projetos."),
+        h("p", { class: "muted", style: { margin: "0 0 14px", fontSize: "12.5px" } }, e.message),
+        h("button", { class: "btn btn-ghost btn-sm", onClick: loadLanding }, "Tentar novamente"))));
+    return;
+  }
   App._projects = projects; App._summary = summary; App._lastch = lastch;
   renderProjectCards(projects, "");
 }
@@ -376,7 +372,14 @@ function renderProjectCards(projects, q) {
   clear(grid);
   const ql = (q || "").trim().toLowerCase();
   const list = projects.filter((p) => !ql || p.name.toLowerCase().includes(ql) || (p.description || "").toLowerCase().includes(ql));
-  if (!list.length) { grid.appendChild(h("p", { class: "muted", style: { padding: "20px 4px" } }, "Nenhum projeto encontrado.")); return; }
+  if (!list.length) {
+    grid.appendChild(h("div", { class: "card", style: { gridColumn: "1 / -1" } },
+      h("div", { class: "card-body", style: { textAlign: "center", padding: "32px 20px" } },
+        h("p", { style: { margin: "0 0 4px", fontWeight: 600 } }, q ? "Nenhum projeto encontrado." : "Nenhum projeto ainda."),
+        h("p", { class: "muted", style: { margin: "0 0 16px", fontSize: "12.5px" } }, q ? "Tente outro termo de busca." : "Crie o primeiro projeto para começar."),
+        q ? null : h("button", { class: "btn btn-primary btn-sm", onClick: newProject }, "Novo projeto"))));
+    return;
+  }
   list.forEach((p) => grid.appendChild(projectCard(p)));
 }
 
@@ -388,9 +391,11 @@ function projectCard(p) {
   getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(badge(s, n, statusClassFor(s) || "na")); seen.add(s); } });
   for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(badge(k, n, "na"));
   if (!chips.childNodes.length) chips.appendChild(h("span", { class: "muted", style: { fontSize: "11px" } }, "Sem status preenchidos"));
-  const actions = p.synthetic ? null : h("div", { style: { display: "flex", gap: "4px", flex: "0 0 auto" } },
-    h("button", { class: "card-act", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); } }, "✎"),
-    h("button", { class: "card-act", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); } }, "⋯"));
+  const editBtn = h("button", { class: "card-act", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); },
+    html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' });
+  const moreBtn = h("button", { class: "card-act", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); },
+    html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>' });
+  const actions = p.synthetic ? null : h("div", { style: { display: "flex", gap: "4px", flex: "0 0 auto" } }, editBtn, moreBtn);
   const body = h("div", { class: "card-body" },
     h("p", { class: "muted", style: { margin: "0 0 10px" } }, p.description || "Sem descrição."),
     h("div", { style: { display: "flex", gap: "16px", fontSize: "11.5px", color: "var(--text-dim)", marginBottom: "12px" } },
@@ -518,15 +523,15 @@ const IC = {
   ops: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
   admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
 };
-/* ícones por item (estilo do modelo: stroke svg 20px) */
+/* ícones por item — SVG stroke 2, estilo Feather, coerentes entre si */
 const ITEM_IC = {
-  "ey-solic": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>',
-  "ey-exec": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
-  "ey-eng": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
-  "ops-proj": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
-  "adm-cad": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h4M7 13h7M16 9h1"/></svg>',
-  "adm-users": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-  "adm-cfg": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8a1.7 1.7 0 0 0-2.9 1.2v.2h-4v-.2a1.7 1.7 0 0 0-2.9-1.2l-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H1v-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.8-2.8.1.1a1.7 1.7 0 0 0 1.9.3H7a1.7 1.7 0 0 0 1-1.6V1h4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1h.2v4h-.2a1.7 1.7 0 0 0-1.6 1z"/></svg>',
+  "ey-solic": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>',
+  "ey-exec": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+  "ey-eng": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+  "ops-proj": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
+  "adm-cad": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 14h6"/></svg>',
+  "adm-users": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  "adm-cfg": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 /* título + caminho (breadcrumb) da página a partir do item ativo */
 function pageMetaOf(activeItem) {
@@ -594,7 +599,9 @@ function buildModuleShell(activeItem) {
 
   const sidebar = h("aside", { class: "sidebar", id: "sidebar", "aria-label": "Navegação principal" },
     h("span", { class: "sidebar-lights", "aria-hidden": "true" }),
-    h("div", { class: "brand" }, h("div", { class: "logo" }, "A"), h("div", { class: "name" }, "Auditoria")),
+    h("div", { class: "brand" },
+      h("img", { class: "brand-mascot", src: "modelos/mascote_projetos_inovacao/ivy_figurinhas/ivy_programando.png", alt: "Ivy" }),
+      h("img", { class: "brand-logo-full", src: "app_planejamento_logo.png", alt: "Grupo Equatorial — Planejamento", "aria-hidden": "true" })),
     menu,
     h("div", { class: "sidebar-foot" }, userMenu, trigger));
 
@@ -654,7 +661,7 @@ function renderPlaceholder(slot, opts) {
     opts.tabs.forEach((t) => tabs.appendChild(h("span", { class: "badge member" }, t)));
     body.appendChild(tabs);
   }
-  body.appendChild(h("p", { class: "muted" }, "🚧 Em construção — esta tela será implementada nas próximas fatias."));
+  body.appendChild(h("p", { class: "muted" }, "Em desenvolvimento. Esta seção será disponibilizada em breve."));
   slot.appendChild(h("div", { class: "card" }, body));
 }
 

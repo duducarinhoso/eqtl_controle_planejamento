@@ -73,9 +73,9 @@ Bucket `avatars` (foto de perfil, pasta por `auth.uid()`).
 
 ## 🎨 Design / Identidade
 
-- Fontes: **Montserrat · Outfit · Plus Jakarta Sans · IBM Plex Sans** (Google Fonts).
-- Tema dark + light (override completo de tokens).
-- Paleta v2 (em `modelos/design-system_v2.html`): institucional **teal/verde/navy** (`--blue: #246b78`, `--green: #71b280`, `--red: #e16464`) — refresh em andamento sobre a paleta v1 (azuis/cianos vibrantes).
+- Fonte base de UI: **Roboto** (do DS v2). As demais (Montserrat/Outfit/Plus Jakarta/IBM Plex) ficam só em telas legadas até migrarem.
+- Tema **dark + light** via `data-theme` no `<html>` (toggle do modelo, em `js/ds.js`); **claro é o padrão**.
+- DS canônico = `modelos/design-system_v2.html`, portado **verbatim** para `styles/design-system.css` + `js/ds.js`; extensões coerentes do app em `styles/app-ds.css`. Paleta institucional **teal/verde/navy** (`--blue:#246b78`, `--green:#71b280`, `--red:#e16464`). Migração por etapas (ver [[D-0004 Migracao 100% para o DS v2 (casa nova)]]); `styles/app.css`/`tokens.css` legados em retirada (grade escopada `.lg-*`).
 - Personalidade (PRODUCT.md): institucional, sóbrio, confiável — "centro de comando" corporativo. Anti-referência: SaaS genérico/lúdico, glassmorphism decorativo, dashboards hero-metric.
 - Acessibilidade alvo: WCAG AA (texto ≥ 4.5:1), foco visível, navegação por teclado na grade, `prefers-reduced-motion`.
 
