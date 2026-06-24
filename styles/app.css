@@ -71,39 +71,9 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 
 /* =====================================================================
    TELA DE AUTENTICACAO
+   O visual da tela de login vive em styles/login.css (escopado em #auth-root),
+   baseado em modelos/00,tela_login.html. A estrutura e gerada por js/auth.js.
    ===================================================================== */
-.auth-wrap {
-  min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr;
-  background: var(--navy-900);
-}
-.auth-aside {
-  position: relative; padding: 48px;
-  display: flex; flex-direction: column; justify-content: space-between;
-  background:
-    radial-gradient(900px 500px at 15% -10%, rgba(26,95,168,.55), transparent 60%),
-    linear-gradient(160deg, var(--navy-800), var(--navy-900));
-  color: var(--navy-100);
-}
-.auth-aside .brand-badge { display: inline-flex; align-items: center; gap: 10px; }
-.auth-aside .brand-badge .dot { width: 10px; height: 28px; border-radius: 3px; background: var(--gold); box-shadow: 0 0 14px rgba(212,175,55,.5); }
-.auth-aside h1 { font-size: 34px; line-height: 38px; font-weight: 800; letter-spacing: -0.03em; color: #fff; margin: 0 0 12px; }
-.auth-aside p { max-width: 460px; color: var(--navy-300); }
-.auth-aside .feat { display: flex; gap: 12px; margin: 10px 0; color: var(--navy-100); font-size: 13px; }
-.auth-aside .feat .ic { color: var(--gold); }
-
-.auth-panel { background: var(--surface-container-low); display: flex; align-items: center; justify-content: center; padding: 40px; }
-.auth-card { width: 100%; max-width: 380px; }
-.auth-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
-.auth-card .sub { margin: 0 0 22px; color: var(--on-surface-variant); font-size: 13px; }
-.auth-switch { margin-top: 18px; font-size: 13px; color: var(--on-surface-variant); text-align: center; }
-.auth-row { display: flex; justify-content: space-between; align-items: center; margin: -4px 0 16px; }
-.link-btn { background: none; border: none; padding: 0; color: var(--primary-container); font-weight: 700; font-size: 13px; cursor: pointer; }
-.link-btn:hover { text-decoration: underline; }
-.auth-msg { padding: 10px 12px; border-radius: var(--r); font-size: 13px; margin-bottom: 14px; }
-.auth-msg.err { background: var(--error-container); color: var(--on-error-container); }
-.auth-msg.ok { background: #d7f5e0; color: #0f5132; }
-
-@media (max-width: 900px) { .auth-wrap { grid-template-columns: 1fr; } .auth-aside { display: none; } }
 
 /* =====================================================================
    SHELL: sidebar navy fixa + workspace fluido
