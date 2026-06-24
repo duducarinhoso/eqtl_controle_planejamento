@@ -71,7 +71,7 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 
 /* marca da sidebar: mascote (Ivy) quando colapsada; logo completa quando expande */
 .brand .brand-mascot{ width:38px; height:38px; flex:none; object-fit:contain; transition:opacity .2s ease; }
-.brand .brand-logo-full{ position:absolute; left:15px; height:34px; max-width:185px; object-fit:contain; object-position:left center; opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.brand .brand-logo-full{ position:absolute; left:15px; height:46px; max-width:200px; object-fit:contain; object-position:left center; opacity:0; pointer-events:none; transition:opacity .2s ease; }
 .sidebar:hover .brand-mascot, .sidebar:focus-within .brand-mascot{ opacity:0; }
 .sidebar:hover .brand-logo-full, .sidebar:focus-within .brand-logo-full{ opacity:1; }
 
