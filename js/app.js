@@ -1869,6 +1869,7 @@ function showDiffModal(results, novas = []) {
 
     // 2) abas existentes: alterações (geram histórico)
     apply.textContent = "Aplicando…";
+    const sheetMaxDims = new Map();
     for (const x of sel) {
       const ex = x.curMap.get(x.ch.row + ":" + x.ch.col);
       const imp = x.fmtMap && x.fmtMap.get(x.ch.row + ":" + x.ch.col);
@@ -1876,6 +1877,17 @@ function showDiffModal(results, novas = []) {
       const dtype = (ex && ex.data_type === "status") || isStatusVal(x.ch.neu) ? "status" : (ex ? ex.data_type : "text");
       await store.saveCell(x.sheet.id, x.ch.row, x.ch.col, { value: x.ch.neu, data_type: dtype, format: fmt });
       touched.add(x.sheet.id);
+      const d = sheetMaxDims.get(x.sheet.id) || { maxR: 0, maxC: 0, sheet: x.sheet };
+      d.maxR = Math.max(d.maxR, x.ch.row);
+      d.maxC = Math.max(d.maxC, x.ch.col);
+      sheetMaxDims.set(x.sheet.id, d);
+    }
+    // Expande row_count/col_count se o Excel trouxe dados além dos limites atuais
+    for (const [sheetId, d] of sheetMaxDims) {
+      const patch = {};
+      if (d.maxR > d.sheet.row_count) patch.row_count = d.maxR + 20;
+      if (d.maxC > d.sheet.col_count) patch.col_count = d.maxC + 4;
+      if (Object.keys(patch).length) await store.updateSheet(sheetId, patch);
     }
     scrim.remove();
 
