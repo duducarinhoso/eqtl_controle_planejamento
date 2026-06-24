@@ -6,6 +6,17 @@ import * as rt from "./realtime.js";
 import * as excel from "./excel.js";
 import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor } from "./util.js";
 
+/* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
+   tentando montar os gráficos/medidores DEMO do modelo (IDs lastWeekChart/topProductsChart/
+   leadsChart, classes .g-svg/.spark) — que não existem no app. Sem eles, o Chart.js polui o
+   console com "Failed to create chart". Só roda quando esses alvos do modelo existem (nunca, no
+   app), virando no-op sem regressão. Não altera o ds.js (verbatim do modelo). */
+if (typeof window.renderAll === "function") {
+  const _renderAll = window.renderAll;
+  const MODEL_TARGETS = "#lastWeekChart, #topProductsChart, #leadsChart, .g-svg, .spark";
+  window.renderAll = () => { if (document.querySelector(MODEL_TARGETS)) _renderAll(); };
+}
+
 const BG_COLORS = ["", "#fff3cd", "#d4edbc", "#cfe2ff", "#f8d7da", "#e2d9f3", "#ffe5d0", "#d9dae0", "#0d1f33"];
 const TX_COLORS = ["#191c20", "#004786", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#ffffff", "#727782"];
 
