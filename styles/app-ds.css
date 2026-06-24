@@ -1,0 +1,46 @@
+/* Elementos NOVOS coerentes com o DS v2 (consultando os tokens do modelo).
+   Usar só quando o modelo não tem o componente pronto. */
+
+/* Deixa o tema do modelo alcançar o body (o app.css legado fixava --workspace-bg,
+   o que quebrava o dark). O modelo já define body{background:var(--bg)}. */
+body{ background:var(--bg); color:var(--text); }
+/* O shell do modelo usa a fonte do modelo (Roboto). A grade legada (.lg-app) migra depois. */
+.app{ font-family:var(--font); }
+
+/* Rótulo de grupo no menu da sidebar — o modelo é flat; agrupamos os 3 módulos.
+   Some quando a sidebar está colapsada (mesma lógica do .menu-label do modelo). */
+.menu-group{
+  padding:14px 22px 5px; font-family:var(--font);
+  font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--text-dim); white-space:nowrap;
+  opacity:0; transform:translateX(-4px);
+  transition:opacity .18s ease, transform .18s ease;
+}
+.sidebar:hover .menu-group, .sidebar:focus-within .menu-group{ opacity:1; transform:none; }
+@media (prefers-reduced-motion: reduce){ .menu-group{ transition:none; } }
+
+/* links do shell não sublinham (o app.css legado sublinhava no hover) */
+.app a:hover{ text-decoration:none; }
+
+/* Botões coerentes com o DS v2 (o modelo não tem um .btn genérico;
+   referência: .chat-input button e as superfícies/tokens do modelo). */
+.btn{ height:36px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border);
+  background:var(--card-bg); color:var(--text); font-family:var(--font); font-weight:500; font-size:13px;
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer; line-height:1; }
+.btn:hover{ background:var(--hover); }
+.btn-primary{ background:var(--blue); color:#fff; border-color:transparent; font-weight:600; }
+.btn-primary:hover{ filter:brightness(1.07); }
+.btn-ghost{ background:transparent; border-color:var(--border); }
+.btn-ghost:hover{ background:var(--hover); }
+
+/* botão-ícone discreto (ações do card) */
+.card-act{ width:26px; height:26px; border:none; background:transparent; color:var(--text-muted);
+  border-radius:5px; cursor:pointer; font-size:14px; line-height:1; }
+.card-act:hover{ background:var(--hover); color:var(--text); }
+
+/* badges de status (semáforo) sobre o .badge do modelo */
+.badge.st-recebido{ background:var(--status-green); color:#fff; }
+.badge.st-pendente{ background:var(--status-yellow); color:#3a2a00; }
+.badge.st-analise{ background:var(--status-blue); color:#fff; }
+.badge.st-parcial{ background:var(--status-orange); color:#fff; }
+.badge.st-na{ background:var(--text-dim); color:#fff; }

@@ -123,6 +123,20 @@ function userChipEl() {
 
 function isAdmin() { return !!(App.profile && App.profile.role === "adm"); }
 
+/* ---- Papéis de acesso (exibição). Banco continua com role 'adm'/'operador'.
+   Mapeamento não-destrutivo: adm→Adm, operador→Operador, resto→Visitante. ---- */
+function roleKey() {
+  const r = (App.profile && App.profile.role) || "";
+  if (r === "adm") return "adm";
+  if (r === "operador") return "operador";
+  return "visitante";
+}
+function roleLabel() {
+  return { adm: "Adm", operador: "Operador", visitante: "Visitante" }[roleKey()];
+}
+/* quem enxerga o módulo Administração (por ora, só Adm) */
+function canSeeAdmin() { return roleKey() === "adm"; }
+
 /* carrega a lista de status do banco (status_options). Degrada para a lista
    padrao embutida se a tabela ainda nao existir (sql/15_status_options.sql). */
 async function reloadStatusOptions() {
@@ -274,7 +288,7 @@ function buildHome() {
     <span class="corner-mark">Selecione um módulo</span>
     <section class="panel panel-green" aria-label="Área Auditoria">
       <div class="panel-content">
-        <a class="liquid-button" href="#/projetos" aria-label="Abrir Auditoria">
+        <a class="liquid-button" href="#/operacoes" aria-label="Abrir Auditoria">
           <span class="glass-flow" aria-hidden="true"></span>
           <span class="glass-sheen" aria-hidden="true"></span>
           <span class="border-runner" aria-hidden="true"></span>
@@ -282,7 +296,7 @@ function buildHome() {
             <span class="button-label">Auditoria</span>
             <span class="button-meta">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5.5 13h6l-.5 9L18.5 11h-6L13 2Z"></path></svg>
-              <span>Controle de solicitações</span>
+              <span>Protótipo rápido</span>
             </span>
           </span>
         </a>
@@ -313,11 +327,21 @@ async function showProjects() {
   App.project = null; App.sheet = null;
   rt.unsubscribeDB(); rt.leavePresence();
   setLoc({ view: "projects" });
-  $("#auth-root").hidden = true;
-  const root = $("#app-root"); root.hidden = false;
-  clear(root);
-  root.appendChild(buildLanding());
+  const slot = mountModuleShell("ops-proj");
+  slot.appendChild(buildLandingBody());
   await loadLanding();
+}
+
+/* Corpo da landing (cards + busca) para montar dentro do module shell.
+   O rail já fornece marca e usuário, então dispensamos o chrome de tela cheia. */
+function buildLandingBody() {
+  const grid = h("div", { class: "proj-grid", id: "proj-grid" });
+  const head = h("div", { class: "landing-head" },
+    h("p", { class: "muted", style: { margin: 0 } }, "Selecione um projeto para abrir ou crie um novo."),
+    h("div", { class: "landing-actions" },
+      isAdmin() ? h("button", { class: "btn btn-ghost", onClick: openAdminPanel }, "⚙ Usuários") : null,
+      h("button", { class: "btn btn-primary", onClick: newProject }, "＋ Novo projeto")));
+  return h("div", { class: "landing-body" }, head, grid);
 }
 
 function buildLanding() {
@@ -358,22 +382,24 @@ function renderProjectCards(projects, q) {
 
 function projectCard(p) {
   const sum = (App._summary && (App._summary.get(p.id) || (p.synthetic && App._summary.get("__all__")))) || new Map();
-  const chips = h("div", { class: "pc-status" });
+  const chips = h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } });
   const seen = new Set();
-  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(h("span", { class: "chip " + (statusClassFor(s) || "na") }, `${s} · ${n}`)); seen.add(s); } });
-  for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(h("span", { class: "chip na" }, `${k} · ${n}`));
+  const badge = (label, n, cls) => h("span", { class: "badge st-" + (cls || "na") }, `${label} · ${n}`);
+  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(badge(s, n, statusClassFor(s) || "na")); seen.add(s); } });
+  for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(badge(k, n, "na"));
   if (!chips.childNodes.length) chips.appendChild(h("span", { class: "muted", style: { fontSize: "11px" } }, "Sem status preenchidos"));
-  return h("div", { class: "proj-card", onClick: () => goProject(p.id) },
-    h("div", { class: "pc-top" },
-      h("div", { class: "pc-name" }, p.name),
-      p.synthetic ? null : h("div", { class: "pc-actions" },
-        h("button", { class: "pc-edit", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); } }, "✎"),
-        h("button", { class: "pc-menu", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); } }, "⋯"))),
-    h("div", { class: "pc-desc" }, p.description || "Sem descrição."),
-    h("div", { class: "pc-meta" },
+  const actions = p.synthetic ? null : h("div", { style: { display: "flex", gap: "4px", flex: "0 0 auto" } },
+    h("button", { class: "card-act", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); } }, "✎"),
+    h("button", { class: "card-act", title: "Mais opções", onClick: (e) => { e.stopPropagation(); projectMenu(e, p); } }, "⋯"));
+  const body = h("div", { class: "card-body" },
+    h("p", { class: "muted", style: { margin: "0 0 10px" } }, p.description || "Sem descrição."),
+    h("div", { style: { display: "flex", gap: "16px", fontSize: "11.5px", color: "var(--text-dim)", marginBottom: "12px" } },
       h("span", {}, "Criado: " + (p.created_at ? fmtDate(p.created_at) : "—")),
       h("span", {}, "Atualizado: " + ((App._lastch && App._lastch.get(p.id)) ? fmtDate(App._lastch.get(p.id)) : "—"))),
     chips);
+  return h("div", { class: "card", style: { cursor: "pointer" }, onClick: () => goProject(p.id) },
+    h("div", { class: "card-head" }, h("h3", {}, p.name), actions),
+    body);
 }
 
 function newProject() {
@@ -424,6 +450,7 @@ async function delProject(p) {
    Assim F5 restaura a tela e Voltar/Avançar navegam dentro do app. */
 function go(hash) { if (location.hash === hash) applyRoute(); else location.hash = hash; }
 function goProjects() { go("#/projetos"); }
+function goOperacoes() { go("#/operacoes"); }
 function goProject(pid) { go("#/p/" + encodeURIComponent(pid)); }
 function goSheet(pid, sid) { go("#/p/" + encodeURIComponent(pid) + "/s/" + encodeURIComponent(sid)); }
 function goToCell(pid, sid, r, c) {
@@ -448,16 +475,26 @@ async function applyRoute() {
   if (App.profile.must_change_password) return forceChangePassword();   // 1º acesso: trocar senha
   const m = hash.match(/^#\/p\/([^/]+)(?:\/s\/([^/]+))?$/);
   if (!m) {
-    if (hash === "#/projetos") {              // entrou na Auditoria: lista de projetos
-      if (!(App.project === null && document.querySelector(".landing"))) await showProjects();
-    } else {                                  // tela inicial: seleção de módulo
-      showHome();
+    // ----- Operações: lista de projetos dentro do module shell -----
+    if (hash === "#/operacoes" || hash === "#/projetos") { await showProjects(); return; }
+    // ----- Portal EY (placeholders) -----
+    if (hash === "#/ey" || hash === "#/ey/solicitacoes") { showModulePlaceholder("ey-solic"); return; }
+    if (hash === "#/ey/executar")    { showModulePlaceholder("ey-exec"); return; }
+    if (hash === "#/ey/engagements") { showModulePlaceholder("ey-eng"); return; }
+    // ----- Administração (placeholders; só Adm) -----
+    if (hash.startsWith("#/admin")) {
+      if (!canSeeAdmin()) { goOperacoes(); return; }
+      if (hash === "#/admin/usuarios") { showModulePlaceholder("adm-users"); return; }
+      if (hash === "#/admin/config")   { showModulePlaceholder("adm-cfg"); return; }
+      showModulePlaceholder("adm-cad"); return;  // #/admin e #/admin/cadastros
     }
+    // ----- Tela inicial (splash de seleção de módulo) -----
+    showHome();
     return;
   }
   const pid = decodeURIComponent(m[1]);
   const sid = m[2] ? decodeURIComponent(m[2]) : null;
-  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .app")) {
+  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .lg-app")) {
     const projs = (App._projects && App._projects.length) ? App._projects : await store.listProjects();
     App._projects = projs;
     const proj = projs.find((x) => String(x.id) === pid);
@@ -474,15 +511,176 @@ async function applyRoute() {
   }
 }
 
+/* ============================ MODULE SHELL (3 módulos) ============================ */
+/* Ícones inline (stroke=currentColor). Itens apontam para rotas hash. */
+const IC = {
+  ey: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>',
+  ops: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
+  admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
+};
+/* ícones por item (estilo do modelo: stroke svg 20px) */
+const ITEM_IC = {
+  "ey-solic": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>',
+  "ey-exec": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
+  "ey-eng": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+  "ops-proj": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
+  "adm-cad": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h4M7 13h7M16 9h1"/></svg>',
+  "adm-users": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  "adm-cfg": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8a1.7 1.7 0 0 0-2.9 1.2v.2h-4v-.2a1.7 1.7 0 0 0-2.9-1.2l-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H1v-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.8-2.8.1.1a1.7 1.7 0 0 0 1.9.3H7a1.7 1.7 0 0 0 1-1.6V1h4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1h.2v4h-.2a1.7 1.7 0 0 0-1.6 1z"/></svg>',
+};
+/* título + caminho (breadcrumb) da página a partir do item ativo */
+function pageMetaOf(activeItem) {
+  const mod = moduleOfItem(activeItem);
+  return { title: labelOfItem(activeItem) || "—", crumb: mod ? mod.label : "" };
+}
+function moduleModel() {
+  const mods = [
+    { key: "ey", label: "Portal EY", icon: IC.ey, items: [
+      { key: "ey-solic", label: "Solicitações", route: "#/ey/solicitacoes" },
+      { key: "ey-exec",  label: "Executar coleta", route: "#/ey/executar" },
+      { key: "ey-eng",   label: "Engagements", route: "#/ey/engagements" },
+    ] },
+    { key: "ops", label: "Operações", icon: IC.ops, items: [
+      { key: "ops-proj", label: "Projetos", route: "#/operacoes" },
+    ] },
+  ];
+  if (canSeeAdmin()) {
+    mods.push({ key: "admin", label: "Administração", icon: IC.admin, items: [
+      { key: "adm-cad",   label: "Cadastros", route: "#/admin/cadastros" },
+      { key: "adm-users", label: "Usuários", route: "#/admin/usuarios" },
+      { key: "adm-cfg",   label: "Configurações", route: "#/admin/config" },
+    ] });
+  }
+  return mods;
+}
+/* qual grupo contém o item ativo (para destacar o ícone quando colapsado) */
+function moduleOfItem(itemKey) {
+  return moduleModel().find((m) => m.items.some((it) => it.key === itemKey)) || null;
+}
+function labelOfItem(itemKey) {
+  for (const m of moduleModel()) { const it = m.items.find((x) => x.key === itemKey); if (it) return it.label; }
+  return "";
+}
+
+/* Monta o shell do modelo (design-system_v2): .app > .sidebar + .main.
+   activeItem = key do item ativo (ex.: "ops-proj"). */
+function buildModuleShell(activeItem) {
+  const mods = moduleModel();
+
+  // menu (flat, com rótulo por módulo) — estrutura do modelo
+  const menu = h("nav", { class: "menu", id: "sidebarMenu", "aria-label": "Módulos" },
+    h("span", { class: "menu-indicator", id: "sidebarIndicator", "aria-hidden": "true" }));
+  mods.forEach((m) => {
+    menu.appendChild(h("div", { class: "menu-group" }, m.label));
+    m.items.forEach((it) => {
+      const on = it.key === activeItem;
+      const a = h("a", on ? { href: it.route, class: "active", "aria-current": "page" } : { href: it.route });
+      a.innerHTML = (ITEM_IC[it.key] || "") + '<span class="menu-label">' + escapeHtml(it.label) + "</span>";
+      menu.appendChild(a);
+    });
+  });
+
+  // rodapé com o usuário (menu do modelo)
+  const p = App.profile || {};
+  const userMenu = h("div", { class: "sidebar-user-menu", id: "sidebarUserMenu", role: "menu" },
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); editDisplayName(); } }, "Editar nome…"),
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); changeMyPhoto(); } }, "Trocar foto…"),
+    h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); supabase.auth.signOut(); } }, "Sair"));
+  const trigger = h("button", { class: "sidebar-trigger", id: "sidebarUserTrigger", type: "button", "aria-expanded": "false", "aria-controls": "sidebarUserMenu" },
+    h("span", { class: "sidebar-avatar" }, initials(p.display_name || p.full_name || "?")),
+    h("span", { class: "sidebar-user-info" }, h("strong", {}, p.display_name || p.full_name || "Usuário"), h("span", {}, roleLabel())),
+    h("span", { class: "sidebar-chevron", id: "sidebarChevron", "aria-hidden": "true",
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>' }));
+
+  const sidebar = h("aside", { class: "sidebar", id: "sidebar", "aria-label": "Navegação principal" },
+    h("span", { class: "sidebar-lights", "aria-hidden": "true" }),
+    h("div", { class: "brand" }, h("div", { class: "logo" }, "A"), h("div", { class: "name" }, "Auditoria")),
+    menu,
+    h("div", { class: "sidebar-foot" }, userMenu, trigger));
+
+  // main: topbar (busca) + page-row (título/breadcrumb) + content
+  const meta = pageMetaOf(activeItem);
+  const search = h("div", { class: "search" });
+  search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>';
+  search.appendChild(h("input", { type: "search", placeholder: "Buscar…", onfocus: () => openGlobalSearch() }));
+  const topbar = h("div", { class: "topbar" }, search);
+  const pageRow = h("div", { class: "page-row" },
+    h("h1", { id: "page-title" }, meta.title),
+    h("div", { class: "crumb", id: "page-crumb" }, meta.crumb));
+  const content = h("div", { class: "content", id: "mod-content" });
+  const main = h("main", { class: "main" }, topbar, pageRow, content);
+
+  // toggle de tema do modelo (flutuante)
+  const themeBtn = h("button", { class: "theme-toggle", title: "Alternar tema", onClick: () => window.toggleTheme && window.toggleTheme() });
+  themeBtn.innerHTML = '<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>';
+
+  return h("div", { class: "app" }, themeBtn, sidebar, main);
+}
+
+/* Garante que o module shell está montado em #app-root com o item ativo certo,
+   e devolve o slot #mod-content (limpo) para a tela preencher. */
+function mountModuleShell(activeItem) {
+  $("#auth-root").hidden = true;
+  const root = $("#app-root"); root.hidden = false;
+  const cur = root.querySelector(".app");
+  if (!cur || !cur.querySelector("#sidebarMenu")) {
+    clear(root);
+    root.appendChild(buildModuleShell(activeItem));
+    if (window.setupSidebar) window.setupSidebar();
+  } else {
+    // atualiza ativo + título sem recriar o shell
+    const lbl = labelOfItem(activeItem);
+    cur.querySelectorAll("#sidebarMenu a").forEach((a) => {
+      const on = (a.querySelector(".menu-label") || {}).textContent === lbl;
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    const meta = pageMetaOf(activeItem);
+    const t = cur.querySelector("#page-title"); if (t) t.textContent = meta.title;
+    const c = cur.querySelector("#page-crumb"); if (c) c.textContent = meta.crumb;
+  }
+  const slot = document.getElementById("mod-content");
+  clear(slot);
+  return slot;
+}
+
+/* Tela genérica "em construção" dentro do slot do module shell.
+   opts = { kicker, title, desc, tabs? } */
+function renderPlaceholder(slot, opts) {
+  const body = h("div", { class: "card-body" });
+  body.appendChild(h("p", { class: "muted", style: { marginTop: 0 } }, opts.desc || ""));
+  if (opts.tabs && opts.tabs.length) {
+    const tabs = h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", margin: "12px 0" } });
+    opts.tabs.forEach((t) => tabs.appendChild(h("span", { class: "badge member" }, t)));
+    body.appendChild(tabs);
+  }
+  body.appendChild(h("p", { class: "muted" }, "🚧 Em construção — esta tela será implementada nas próximas fatias."));
+  slot.appendChild(h("div", { class: "card" }, body));
+}
+
+/* Telas-placeholder por item de módulo. */
+function showModulePlaceholder(itemKey) {
+  const slot = mountModuleShell(itemKey);
+  const P = {
+    "ey-solic":  { kicker: "Portal EY", title: "Solicitações", desc: "Triagem das solicitações do relatório EY, com Área e Responsável." },
+    "ey-exec":   { kicker: "Portal EY", title: "Executar coleta", desc: "Disparo da coleta do relatório EY (sync incremental)." },
+    "ey-eng":    { kicker: "Portal EY", title: "Engagements", desc: "Catálogo de engagements EY e seus grupos." },
+    "adm-cad":   { kicker: "Administração", title: "Cadastros", desc: "Entidades do processo. Cada uma será uma aba.", tabs: ["Pessoas", "Áreas", "Unidades", "Lista de status"] },
+    "adm-users": { kicker: "Administração", title: "Usuários", desc: "Permissões de acesso (Adm · Operador · Visitante) e allowlist de e-mails." },
+    "adm-cfg":   { kicker: "Administração", title: "Configurações", desc: "Ajustes gerais da aplicação." },
+  };
+  renderPlaceholder(slot, P[itemKey] || { kicker: "", title: "Em construção", desc: "" });
+}
+
 function buildShell() {
   // ---- Sidebar ----
   const sheetList = h("div", { class: "sheet-list", id: "sheet-list" });
-  const sidebar = h("aside", { class: "sidebar" },
+  const sidebar = h("aside", { class: "lg-sidebar" },
     h("div", { class: "brand" },
       h("img", { class: "brand-logo", src: "app_planejamento_logo.png", alt: "App Planejamento" }),
       h("div", { class: "brand-proj", id: "brand-proj" }, App.project ? App.project.name : "")),
     h("div", { class: "side-nav" },
-      h("button", { class: "side-nav-item nav-others", onClick: goProjects }, "↩ Outros projetos"),
+      h("button", { class: "side-nav-item nav-others", onClick: goOperacoes }, "↩ Operações"),
       h("button", { class: "side-nav-item nav-dash", id: "nav-dashboard", onClick: () => goProject(App.project.id) },
         h("span", { class: "nav-ic", html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.6"/><rect x="13" y="10" width="8" height="11" rx="1.6"/><rect x="3" y="13" width="8" height="8" rx="1.6"/></svg>' }),
         h("span", {}, "Dashboard")),
@@ -508,7 +706,7 @@ function buildShell() {
   const collapseBtn = h("button", { class: "collapse-btn", title: "Recolher/expandir menu", onClick: toggleSidebar }, "☰");
   const crumb = h("div", { class: "crumb", id: "crumb" }, "—");
   const presence = h("div", { class: "presence", id: "presence" });
-  const topbar = h("header", { class: "topbar" }, collapseBtn, crumb, presence, userChipEl());
+  const topbar = h("header", { class: "lg-topbar" }, collapseBtn, crumb, presence, userChipEl());
 
   // ---- Toolbar ----
   const toolbar = buildToolbar();
@@ -535,7 +733,7 @@ function buildShell() {
       h("span", { id: "zoom-label", class: "zoom-label", title: "Redefinir para 100%", onClick: () => setZoom(100) }, App.zoom + "%")));
 
   const workspace = h("div", { class: "workspace" }, topbar, toolbar, gridScroll, statusbar);
-  return h("div", { class: "app" }, sidebar, workspace);
+  return h("div", { class: "lg-app" }, sidebar, workspace);
 }
 
 /* ============================ TOOLBAR ============================ */
@@ -1131,7 +1329,7 @@ function setRtStatus(on, label) {
   el.querySelector("span:last-child").textContent = label;
 }
 function toggleSidebar() {
-  document.querySelector(".app")?.classList.toggle("sidebar-collapsed");
+  document.querySelector(".lg-app")?.classList.toggle("sidebar-collapsed");
 }
 
 /* presenca no topbar: todos os usuários centralizados (online verde / offline cinza) */

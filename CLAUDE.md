@@ -21,3 +21,8 @@ Portal interno de controle de solicitações de auditoria/planejamento contábil
 - `eqtl-checkpoint` — fecha a sessão gravando o handoff em `projeto/` (gatilho: `/eqtl_checkpoint` ou "fazer o checkpoint").
 - `writing-plans` — escreve planos bite-sized em `projeto/planos/`.
 - `executing-plans` — executa um plano com checkpoints.
+
+**Painel de design** (consultar por contexto ou em painel — roteamento e protocolo em `projeto/Central.md` § 🎨 Painel de Design):
+- `impeccable` — design/redesign/crítica/audit/polish de UI (`/impeccable`). Helpers `.mjs` **exigem Node**; sem Node, usar a orientação da skill em modo manual.
+- `redesign-existing-projects` — auditoria de redesign de app existente (anti-AI-slop; ciente de vanilla CSS e dashboards).
+- `dudu-check-cores` — auditoria de cor/contraste/tipografia WCAG AA em dark+light, com preview antes/depois (`/dudu-check-cores`).
