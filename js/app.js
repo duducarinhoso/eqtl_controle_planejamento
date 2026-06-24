@@ -4,7 +4,9 @@ import * as store from "./store.js";
 import { Grid } from "./grid.js";
 import * as rt from "./realtime.js";
 import * as excel from "./excel.js";
-import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor } from "./util.js";
+import { parseAbas } from "./parser.js";
+import { openSolic, refreshSolic } from "./solic.js";
+import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, getCompanies, setCompanies } from "./util.js";
 
 /* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
    tentando montar os gráficos/medidores DEMO do modelo (IDs lastWeekChart/topProductsChart/
@@ -89,6 +91,8 @@ async function ensureProfile() {
   if (!App.profile) { showAuth("login"); return false; }
   App.profilesMap = await store.getProfilesMap();
   await reloadStatusOptions();
+  await reloadCompanies();
+  await reloadAreas();
   if (!App._presenceStarted) { App._presenceStarted = true; startPresence(); }
   return true;
 }
@@ -153,6 +157,14 @@ function canSeeAdmin() { return roleKey() === "adm"; }
 async function reloadStatusOptions() {
   try { const opts = await store.loadStatusOptions(); if (opts.length) setStatusOptions(opts); }
   catch (_) { /* tabela ainda nao criada: mantem o padrao */ }
+}
+async function reloadCompanies() {
+  try { const c = await store.loadCompanies(); setCompanies(c); App.companies = c; }
+  catch (_) { App.companies = []; setCompanies([]); }
+}
+async function reloadAreas() {
+  try { App.areas = await store.loadAreas(); }
+  catch (_) { App.areas = []; }
 }
 
 /* avatar: foto se houver, senão iniciais */
@@ -702,6 +714,10 @@ function buildShell() {
       h("button", { class: "side-nav-item nav-dash", id: "nav-dashboard", onClick: () => goProject(App.project.id) },
         h("span", { class: "nav-ic", html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.6"/><rect x="13" y="10" width="8" height="11" rx="1.6"/><rect x="3" y="13" width="8" height="8" rx="1.6"/></svg>' }),
         h("span", {}, "Dashboard")),
+      h("div", { class: "side-nav-item nav-solic", id: "nav-solic", onClick: showSolicitacoes },
+        h("span", { class: "nav-ic", html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="3" rx="1"/><rect x="3" y="10.5" width="18" height="3" rx="1"/><rect x="3" y="17" width="18" height="3" rx="1"/></svg>' }),
+        h("span", { class: "ns-lab" }, "Solicitações"),
+        h("button", { class: "ns-orig", title: "Ver a aba original (somente consulta)", onClick: (e) => { e.stopPropagation(); openOriginalSolic(); } }, "↗")),
       h("button", { class: "side-nav-item nav-search", onClick: openGlobalSearch },
         h("span", { class: "nav-ic" }, "🔎"), h("span", {}, "Busca geral"))),
     h("div", { class: "side-actions" },
@@ -897,6 +913,10 @@ function sheetInfo(s) {
   return App.sheetIndex.get(String(s.name || "").trim()) || null;
 }
 function sheetAreaText(s) { const i = sheetInfo(s); return i && i.areas.length ? i.areas.join(" · ") : ""; }
+/* a aba índice "Solicitações" virou a tela-tabela: some da lista de abas */
+function isSolicIndex(s) { return !!(s && s.kind === "index" && /solicita/i.test(s.name)); }
+function solicIndexSheet() { return App.sheets.find(isSolicIndex) || null; }
+function openOriginalSolic() { const s = solicIndexSheet(); if (s) goSheet(App.project.id, s.id); else toast("Aba original não encontrada."); }
 
 function bumpActivity(sheetId) {
   const iso = new Date().toISOString();
@@ -910,9 +930,10 @@ function renderSidebar() {
   clear(list);
   const inExp = App.exportMode;
   const q = (App.sheetFilter || "").trim().toLowerCase();
-  let sheets = App.sheets;
+  const base = App.sheets.filter((s) => !isSolicIndex(s));
+  let sheets = base;
   if (q && !inExp) {
-    sheets = App.sheets.filter((s) => {
+    sheets = base.filter((s) => {
       const info = sheetInfo(s);
       const hay = (s.name + " " + sheetAreaText(s) + " " + (info ? info.scot + " " + info.clientPortal : "")).toLowerCase();
       return hay.includes(q);
@@ -1011,11 +1032,12 @@ async function showDashboard() {
   renderAppPresence();
   updateCellPresence();
   $("#nav-dashboard")?.classList.add("active");
+  $("#nav-solic")?.classList.remove("active");
   { const cr = $("#crumb"); if (cr) { clear(cr); cr.appendChild(h("span", { class: "crumb-name" }, "Dashboard")); } }
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "none";
   rt.unsubscribeDB(); rt.leavePresence();
   const gs = $("#grid-scroll");
-  clear(gs); gs.classList.add("dash");
+  clear(gs); gs.classList.remove("solic"); gs.classList.add("dash");
 
   const tabs = h("div", { class: "dash-tabs" });
   const mkTab = (key, label) => h("button", { class: "dtab" + (App.dashTab === key ? " on" : ""),
@@ -1256,11 +1278,12 @@ async function selectSheet(sheet) {
   App.sheet = sheet;
   App.view = "grid";
   $("#nav-dashboard")?.classList.remove("active");
+  $("#nav-solic")?.classList.remove("active");
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "";
   renderSidebar();
   renderCrumb(sheet);
   const gs = $("#grid-scroll");
-  gs.classList.remove("dash");
+  gs.classList.remove("dash"); gs.classList.remove("solic");
   if (!App.grid) App.grid = new Grid(gs, actions);
 
   setRtStatus(false, "Carregando…");
@@ -1991,13 +2014,18 @@ function openGlobalSearch() {
 }
 
 /* ============================ CONFIGURAÇÃO / GERENCIAR LISTA ============================ */
+function cfgItem(title, desc, fn) {
+  return h("div", { class: "cfg-item", onClick: () => { closeDrawer(); fn(); } },
+    h("div", { class: "cfg-ic" }, "≣"),
+    h("div", {}, h("div", { class: "cfg-t" }, title), h("div", { class: "cfg-d" }, desc)));
+}
 function openConfig() {
   const body = h("div", { class: "db" });
   body.appendChild(h("p", { class: "muted", style: { fontSize: "12px", margin: "0 0 12px" } }, "Ajustes da planilha compartilhada (valem para todos)."));
-  body.appendChild(h("div", { class: "cfg-item", onClick: () => { closeDrawer(); openListManager(); } },
-    h("div", { class: "cfg-ic" }, "≣"),
-    h("div", {}, h("div", { class: "cfg-t" }, "Gerenciar lista"),
-      h("div", { class: "cfg-d" }, "Editar os itens do dropdown de status e converter textos das células em itens da lista."))));
+  body.appendChild(cfgItem("Lista de Status", "Itens do dropdown de status e conversão de textos das células em itens da lista.", openListManager));
+  body.appendChild(cfgItem("Lista de Empresas", "Empresas usadas no cruzamento Empresa × Status das abas (alimenta o Dashboard real).", openCompaniesManager));
+  body.appendChild(cfgItem("Lista de Áreas", "Áreas padronizadas usadas como tags na tela Solicitações.", openAreasManager));
+  body.appendChild(cfgItem("Conferir leitura das abas", "Mostra o que o parser entendeu de cada aba (empresa × status) antes do Dashboard usar.", openParserCheck));
   openDrawer("Configuração", body);
 }
 
@@ -2166,3 +2194,304 @@ function buildConverter(opts) {
 
 /* ============================ GO ============================ */
 boot();
+
+/* ===== Empresas / Áreas / Parser / Solicitações (port da Fase 1-3) ===== */
+async function openCompaniesManager() {
+  let list = [], missing = false;
+  try { list = await store.loadCompanies(); } catch (_) { missing = true; }
+  const scrim = h("div", { class: "scrim" });
+  const close = () => scrim.remove();
+  const body = h("div", { class: "scrollbody" });
+
+  if (missing) {
+    body.appendChild(h("div", { class: "lm-warn" },
+      h("strong", {}, "Tabela ainda não criada."),
+      h("p", { class: "muted", style: { margin: "8px 0 0" } }, "Rode "), h("code", {}, "sql/16_companies.sql"),
+      h("span", { class: "muted" }, " no Supabase (SQL Editor) para habilitar a Lista de Empresas.")));
+  } else {
+    const listBox = h("div", { class: "lm-list" });
+    const detectBox = h("div", { class: "lm-detect" });
+    const row = (o) => {
+      const label = h("input", { class: "input lm-label", value: o.label });
+      const save = h("button", { class: "btn btn-sm", onClick: async () => {
+        const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
+        try { const saved = await store.upsertCompany({ id: o.id, label: nl, position: o.position }); Object.assign(o, saved); await reloadCompanies(); toast("Empresa salva."); }
+        catch (e) { toast("Erro ao salvar: " + (e.message || e), "err"); }
+      } }, "Salvar");
+      const del = h("button", { class: "btn btn-ghost btn-sm", title: "Remover", onClick: async () => {
+        if (!(await confirmModal("Remover empresa", `Remover "${o.label}" da lista?`))) return;
+        try { await store.deleteCompany(o.id); list = list.filter((x) => x.id !== o.id); render(); await reloadCompanies(); }
+        catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
+      } }, "✕");
+      return h("div", { class: "lm-row" }, label, save, del);
+    };
+    const render = () => {
+      clear(listBox);
+      if (!list.length) listBox.appendChild(h("p", { class: "muted" }, "Nenhuma empresa ainda. Use “Detectar das abas” ou adicione manualmente."));
+      list.forEach((o) => listBox.appendChild(row(o)));
+    };
+    render();
+    const addBtn = h("button", { class: "btn btn-primary btn-sm", onClick: async () => {
+      try { const saved = await store.upsertCompany({ label: "Nova empresa", position: list.length + 1 }); list.push(saved); render(); await reloadCompanies(); }
+      catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
+    } }, "＋ Adicionar empresa");
+    const detectBtn = h("button", { class: "btn btn-sm", onClick: () => detectFlow() }, "🔍 Detectar das abas");
+
+    async function detectFlow() {
+      clear(detectBox);
+      detectBox.appendChild(h("div", { class: "muted", style: { fontSize: "12px", margin: "6px 0" } }, "Varrendo as abas…"));
+      detectBox.appendChild(h("div", { class: "spinner", style: { margin: "10px auto" } }));
+      let cand;
+      try { cand = await detectCompanyCandidates(); }
+      catch (e) { clear(detectBox); detectBox.appendChild(h("p", { class: "muted" }, "Erro na detecção: " + e.message)); return; }
+      const have = new Set(list.map((x) => x.label.toLowerCase()));
+      cand = cand.filter((x) => !have.has(x.label.toLowerCase())).slice(0, 30);
+      clear(detectBox);
+      if (!cand.length) { detectBox.appendChild(h("p", { class: "muted" }, "Nenhuma empresa nova detectada.")); return; }
+      detectBox.appendChild(h("p", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } }, "Marque as que são empresas e clique em adicionar:"));
+      const checks = [];
+      cand.forEach((c) => {
+        const cb = h("input", { type: "checkbox", checked: c.sheets >= 2 });
+        checks.push({ cb, label: c.label });
+        detectBox.appendChild(h("label", { class: "lm-detect-row" }, cb,
+          h("span", { class: "lm-detect-lbl" }, c.label),
+          h("span", { class: "muted", style: { fontSize: "11px" } }, `${c.sheets} aba(s) · ${c.count}×`)));
+      });
+      detectBox.appendChild(h("button", { class: "btn btn-primary btn-sm", style: { marginTop: "10px" }, onClick: async () => {
+        const sel = checks.filter((x) => x.cb.checked).map((x) => x.label);
+        if (!sel.length) return toast("Marque ao menos uma.");
+        try { await store.addCompanies(sel); list = await store.loadCompanies(); render(); await reloadCompanies(); clear(detectBox); toast(`${sel.length} empresa(s) adicionada(s).`); }
+        catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
+      } }, "Adicionar selecionadas"));
+    }
+
+    body.appendChild(h("div", { class: "lm-card" },
+      h("h4", {}, "Empresas"),
+      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nomes exatamente como aparecem nas abas (cabeçalho de coluna ou coluna “Empresa”). Alimentam o cruzamento Empresa × Status."),
+      listBox,
+      h("div", { style: { marginTop: "10px", display: "flex", gap: "8px" } }, addBtn, detectBtn),
+      detectBox));
+  }
+
+  const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
+  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Lista de Empresas"), body, foot);
+  scrim.appendChild(modal);
+  scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
+  document.body.appendChild(scrim);
+}
+
+/* varre todas as abas e propõe candidatos a empresa: rótulos que aparecem como
+   CABEÇALHO acima de células de status (matriz) ou repetidos na LINHA de células
+   de status (lista). Ranqueia por nº de abas e frequência. O usuário revisa. */
+async function detectCompanyCandidates() {
+  const STOP = new Set(["#", "empresa", "evidências", "evidencias", "status", "responsável", "responsavel",
+    "solicitação", "solicitacao", "área", "area", "scot", "client portal", "sheet", "ok", "grupo equatorial",
+    "qtd. de itens", "área eqtl", "area eqtl", "data da solicitação", "deadline", "total"]);
+  const statusSet = new Set(getStatusOptions().map((s) => s.toLowerCase()));
+  const counts = new Map();   // label -> { count, sheets:Set }
+  const bump = (label, sid) => {
+    const key = label.trim();
+    const low = key.toLowerCase();
+    if (!key || key.length < 2 || key.length > 24) return;
+    if (STOP.has(low) || statusSet.has(low)) return;
+    if (/^-?\d[\d.,/-]*$/.test(key)) return;   // números/datas
+    if (!counts.has(key)) counts.set(key, { count: 0, sheets: new Set() });
+    const e = counts.get(key); e.count++; e.sheets.add(sid);
+  };
+  const txt = (c) => (c && c.value != null ? String(c.value).trim() : "");
+  const isStatus = (c) => c && c.data_type === "status";
+  for (const s of App.sheets) {
+    if (s.kind === "index") continue;
+    let cells;
+    try { cells = await store.loadCells(s.id); } catch (_) { continue; }
+    const map = new Map(cells.map((c) => [c.row + ":" + c.col, c]));
+    for (const c of cells) {
+      if (!isStatus(c)) continue;
+      // matriz: cabeçalho da coluna (1ª célula de texto não-status acima)
+      for (let r = c.row - 1; r >= 1 && r >= c.row - 10; r--) {
+        const hd = map.get(r + ":" + c.col);
+        if (hd && !isStatus(hd) && txt(hd)) { bump(txt(hd), s.id); break; }
+      }
+      // lista: todos os rótulos de texto à esquerda na mesma linha (o repetido = empresa)
+      for (let cc = c.col - 1; cc >= 1 && cc >= c.col - 8; cc--) {
+        const l = map.get(c.row + ":" + cc);
+        if (l && !isStatus(l) && txt(l)) bump(txt(l), s.id);
+      }
+    }
+  }
+  return [...counts.entries()]
+    .map(([label, v]) => ({ label, count: v.count, sheets: v.sheets.size }))
+    .sort((a, b) => b.sheets - a.sheets || b.count - a.count);
+}
+
+/* ---- Conferir leitura das abas (validação do parser) ---- */
+async function openParserCheck() {
+  const comps = getCompanies();
+  if (!comps.length) { toast("Cadastre as empresas primeiro (Configuração → Lista de Empresas).", "err"); return; }
+  const scrim = h("div", { class: "scrim" });
+  const close = () => scrim.remove();
+  const summary = h("div", { class: "muted", style: { fontSize: "12px", margin: "0 0 10px" } }, "Lendo abas…");
+  const listEl = h("div", { class: "pc-list" });
+  const body = h("div", { class: "scrollbody" }, summary, listEl);
+  const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
+  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Conferir leitura das abas"), body, foot);
+  scrim.appendChild(modal);
+  scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
+  document.body.appendChild(scrim);
+
+  let recognized = 0, none = 0, totalSoFar = 0;
+  const out = await parseAbas(App.sheets, (id) => store.loadCells(id), comps, getStatusOptions(),
+    (done, total, s, res) => {
+      if (res.orientation === "none") none++; else recognized++;
+      totalSoFar += res.records.length;
+      const perStatus = new Map();
+      for (const rec of res.records) perStatus.set(rec.status, (perStatus.get(rec.status) || 0) + 1);
+      listEl.appendChild(pcRow(s, res, perStatus));
+      summary.textContent = `Lendo… ${done}/${total} · ${recognized} reconhecida(s), ${none} não · ${totalSoFar} registros`;
+    });
+  const statusParts = [...out.byStatus.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(" · ");
+  summary.innerHTML = `<b>${out.total}</b> registros · ${recognized} aba(s) reconhecida(s), ${none} não reconhecida(s).` + (statusParts ? `<br>${escapeHtml(statusParts)}` : "");
+}
+function pcRow(s, res, perStatus) {
+  const badge = res.orientation === "matrix" ? "Matriz" : res.orientation === "list" ? "Lista" : "—";
+  const chips = h("div", { class: "pc-chips" });
+  [...perStatus.entries()].forEach(([k, v]) => chips.appendChild(h("span", { class: "chip " + (statusClassFor(k) || "na") }, `${k} ${v}`)));
+  return h("div", { class: "pc-item " + (res.orientation === "none" ? "pc-none" : "pc-ok") },
+    h("div", { class: "pc-head" },
+      h("span", { class: "pc-name" }, s.name),
+      h("span", { class: "pc-orient" }, badge),
+      h("span", { class: "pc-count" }, res.orientation === "none" ? "não reconhecida" : `${res.records.length} reg · ${res.companies.length} empresas`)),
+    res.records.length ? chips : null);
+}
+
+async function openAreasManager() {
+  let list = [], missing = false;
+  try { list = await store.loadAreas(); } catch (_) { missing = true; }
+  const scrim = h("div", { class: "scrim" });
+  const close = () => scrim.remove();
+  const body = h("div", { class: "scrollbody" });
+  if (missing) {
+    body.appendChild(h("div", { class: "lm-warn" }, h("strong", {}, "Tabela ainda não criada."),
+      h("p", { class: "muted", style: { margin: "8px 0 0" } }, "Rode "), h("code", {}, "sql/17_solicitacoes.sql"),
+      h("span", { class: "muted" }, " no Supabase para habilitar as Áreas.")));
+  } else {
+    const listBox = h("div", { class: "lm-list" });
+    const row = (o) => {
+      const label = h("input", { class: "input lm-label", value: o.label });
+      const save = h("button", { class: "btn btn-sm", onClick: async () => {
+        const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
+        try { const s = await store.upsertArea({ id: o.id, label: nl, position: o.position }); Object.assign(o, s); await reloadAreas(); toast("Área salva."); }
+        catch (e) { toast("Erro ao salvar: " + (e.message || e), "err"); }
+      } }, "Salvar");
+      const del = h("button", { class: "btn btn-ghost btn-sm", title: "Remover", onClick: async () => {
+        if (!(await confirmModal("Remover área", `Remover "${o.label}"?`))) return;
+        try { await store.deleteArea(o.id); list = list.filter((x) => x.id !== o.id); render(); await reloadAreas(); }
+        catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
+      } }, "✕");
+      return h("div", { class: "lm-row" }, h("span", { class: "badge" }, o.label), label, save, del);
+    };
+    const render = () => { clear(listBox); if (!list.length) listBox.appendChild(h("p", { class: "muted" }, "Nenhuma área ainda. São semeadas ao abrir a tela Solicitações, ou adicione aqui.")); list.forEach((o) => listBox.appendChild(row(o))); };
+    render();
+    const addBtn = h("button", { class: "btn btn-primary btn-sm", onClick: async () => {
+      try { const s = await store.upsertArea({ label: "Nova área", position: list.length + 1 }); list.push(s); render(); await reloadAreas(); }
+      catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
+    } }, "＋ Adicionar área");
+    body.appendChild(h("div", { class: "lm-card" }, h("h4", {}, "Áreas"),
+      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Tags padronizadas de Área usadas na tela Solicitações (multi-seleção)."),
+      listBox, h("div", { style: { marginTop: "10px" } }, addBtn)));
+  }
+  const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
+  const modal = h("div", { class: "modal wide" }, h("h3", {}, "Lista de Áreas"), body, foot);
+  scrim.appendChild(modal);
+  scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
+  document.body.appendChild(scrim);
+}
+
+async function computeAbaStatusCounts() {
+  const out = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
+  const m = new Map();
+  for (const { sheet, res } of out.perSheet) {
+    const byS = new Map();
+    for (const rec of res.records) byS.set(rec.status, (byS.get(rec.status) || 0) + 1);
+    m.set(String(sheet.name || "").trim(), byS);
+  }
+  return m;
+}
+
+/* semeia a tabela solicitacoes a partir da aba índice (1ª abertura) */
+async function seedSolicitacoes() {
+  const idxRows = await store.readIndexRows(App.project, App.sheets);
+  if (!idxRows.length) return [];
+  const abaByKey = new Map(App.sheets.filter((s) => !isSolicIndex(s)).map((s) => [String(s.name).trim().toLowerCase(), s.name]));
+  const cleanFirst = (v) => String(v || "").trim().split(/\s+/)[0].toLowerCase();
+  const seedAreas = new Set();
+  const toInsert = idxRows.map((r, i) => {
+    let link = "";
+    const k1 = cleanFirst(r.sheet), k2 = String(r.sheet || "").trim().toLowerCase();
+    if (k2 && abaByKey.has(k2)) link = abaByKey.get(k2);
+    else if (k1 && abaByKey.has(k1)) link = abaByKey.get(k1);
+    if (r.area) seedAreas.add(r.area);
+    return { area: r.area ? [r.area] : [], scot: r.scot, client_portal: r.client_portal,
+      data_solicitacao: r.data_solicitacao, deadline: r.deadline, sheet_link: link,
+      area_eqtl: r.area_eqtl, responsavel: r.responsavel, position: i + 1 };
+  });
+  try { await store.insertSolicitacoes(toInsert, App.project); } catch (e) { toast("Erro ao semear: " + e.message, "err"); }
+  try { await store.addAreas([...seedAreas]); await reloadAreas(); } catch (_) {}
+  try { return await store.loadSolicitacoes(App.project); } catch (_) { return []; }
+}
+
+async function showSolicitacoes() {
+  if (!App.project) return;
+  App.view = "solic";
+  App.sheet = null;
+  setLoc({ projectId: App.project?.id, projectName: App.project?.name, view: "solicitacoes" });
+  renderSidebar();
+  renderAppPresence(); updateCellPresence();
+  document.querySelectorAll(".side-nav-item.active").forEach((e) => e.classList.remove("active"));
+  $("#nav-solic")?.classList.add("active");
+  { const cr = $("#crumb"); if (cr) { clear(cr); cr.appendChild(h("span", { class: "crumb-name" }, "Solicitações")); } }
+  const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "none";
+  rt.unsubscribeDB(); rt.leavePresence();
+  const gs = $("#grid-scroll"); clear(gs); gs.classList.remove("dash"); gs.classList.add("solic");
+  const wrap = h("div", { class: "solic-host" });
+  wrap.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
+  gs.appendChild(wrap);
+
+  let rows;
+  try { rows = await store.loadSolicitacoes(App.project); }
+  catch (e) { clear(wrap); wrap.appendChild(solicMissingNotice()); return; }
+  if (App.view !== "solic") return;
+  if (!rows.length) rows = await seedSolicitacoes();
+  if (!App._abaCounts) { try { App._abaCounts = await computeAbaStatusCounts(); } catch (_) { App._abaCounts = new Map(); } }
+  if (App.view !== "solic") return;
+  App._solicRows = rows;
+  clear(wrap);
+  App._solicCtx = buildSolicCtx();
+  openSolic(wrap, App._solicCtx);
+}
+
+function buildSolicCtx() {
+  const abas = App.sheets.filter((s) => !isSolicIndex(s)).map((s) => ({ name: s.name, sub: sheetAreaText(s) }));
+  const syncRows = () => { if (App._solicCtx) App._solicCtx.rows = App._solicRows; refreshSolic(); };
+  return {
+    rows: App._solicRows, abas,
+    areas: (App.areas || []).map((a) => a.label),
+    statusOptions: getStatusOptions(),
+    abaCounts: App._abaCounts || new Map(),
+    onEdit: (row, patch) => { Object.assign(row, patch); store.updateSolicitacao(row.id, patch).catch((e) => toast("Falha ao salvar: " + e.message, "err")); },
+    onAdd: async () => { try { const r = await store.insertSolicitacao({ area: [], position: App._solicRows.length + 1 }, App.project); App._solicRows.push(r); syncRows(); } catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); } },
+    onDelete: async (row) => { if (!(await confirmModal("Excluir linha", "Excluir esta linha? (não afeta a aba original)"))) return; try { await store.deleteSolicitacao(row.id); App._solicRows = App._solicRows.filter((x) => x.id !== row.id); syncRows(); } catch (e) { toast("Erro: " + (e.message || e), "err"); } },
+    onDeleteMany: async (ids) => { if (!(await confirmModal("Excluir", `Excluir ${ids.length} linha(s)?`))) return; for (const id of ids) { try { await store.deleteSolicitacao(id); } catch (_) {} } App._solicRows = App._solicRows.filter((x) => !ids.includes(x.id)); syncRows(); },
+    onGoAba: (name) => { const s = App.sheets.find((x) => String(x.name) === String(name)) || App.sheets.find((x) => String(x.name).trim() === String(name).trim()); if (s) goSheet(App.project.id, s.id); },
+    onGoOriginal: openOriginalSolic,
+    onRecount: async () => { App._abaCounts = await computeAbaStatusCounts(); if (App._solicCtx) App._solicCtx.abaCounts = App._abaCounts; },
+    onAddArea: async (label) => { try { await store.addAreas([label]); await reloadAreas(); if (App._solicCtx) App._solicCtx.areas = (App.areas || []).map((a) => a.label); } catch (_) {} },
+  };
+}
+
+function solicMissingNotice() {
+  return h("div", { class: "lm-warn", style: { margin: "30px" } },
+    h("strong", {}, "Tabela ainda não criada."),
+    h("p", { class: "muted", style: { margin: "8px 0 0" } }, "Rode "), h("code", {}, "sql/17_solicitacoes.sql"),
+    h("span", { class: "muted" }, " no Supabase (SQL Editor) para habilitar a tela Solicitações."));
+}

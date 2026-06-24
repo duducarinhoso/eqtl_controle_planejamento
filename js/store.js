@@ -658,3 +658,118 @@ export async function listEyRequestDocuments(clientRequestId) {
   if (error) throw error;
   return data || [];
 }
+
+/* ===================== LISTA DE EMPRESAS ===================== */
+export async function loadCompanies() {
+  const { data, error } = await supabase.from("companies").select("*").order("position", { ascending: true }).order("label", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+export async function upsertCompany(c) {
+  const { data, error } = await supabase.from("companies").upsert(c, { onConflict: "id" }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function addCompanies(labels) {
+  if (!labels || !labels.length) return;
+  const rows = labels.map((label, i) => ({ label, position: i + 1 }));
+  const { error } = await supabase.from("companies").upsert(rows, { onConflict: "label", ignoreDuplicates: true });
+  if (error) throw error;
+}
+export async function deleteCompany(id) {
+  const { error } = await supabase.from("companies").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ===================== LISTA DE AREAS ===================== */
+export async function loadAreas() {
+  const { data, error } = await supabase.from("areas").select("*").order("position", { ascending: true }).order("label", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+export async function upsertArea(a) {
+  const { data, error } = await supabase.from("areas").upsert(a, { onConflict: "id" }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function addAreas(labels) {
+  if (!labels || !labels.length) return;
+  const rows = labels.map((label, i) => ({ label, position: i + 1 }));
+  const { error } = await supabase.from("areas").upsert(rows, { onConflict: "label", ignoreDuplicates: true });
+  if (error) throw error;
+}
+export async function deleteArea(id) {
+  const { error } = await supabase.from("areas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ===================== SOLICITACOES (tela-tabela) ===================== */
+export async function loadSolicitacoes(project) {
+  const q = scoped(supabase.from("solicitacoes").select("*").order("position", { ascending: true }), project);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function insertSolicitacao(row, project) {
+  const body = { ...row };
+  if (project && !project.synthetic && project.id) body.project_id = project.id;
+  const { data, error } = await supabase.from("solicitacoes").insert(body).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function insertSolicitacoes(rows, project) {
+  const pid = (project && !project.synthetic && project.id) ? project.id : null;
+  const body = rows.map((r) => (pid ? { ...r, project_id: pid } : { ...r }));
+  const { error } = await supabase.from("solicitacoes").insert(body);
+  if (error) throw error;
+}
+export async function updateSolicitacao(id, patch) {
+  const { error } = await supabase.from("solicitacoes").update(patch).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteSolicitacao(id) {
+  const { error } = await supabase.from("solicitacoes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* le as LINHAS COMPLETAS da aba indice "Solicitacoes" para semear a tabela solicitacoes. */
+export async function readIndexRows(project, sheets = null) {
+  try {
+    const all = sheets || await listSheets(project);
+    const idxSheets = all.filter((s) => s.kind === "index");
+    const target = idxSheets.find((s) => /solicita/i.test(s.name)) || idxSheets[0];
+    if (!target) return [];
+    const cells = await loadCells(target.id);
+    if (!cells.length) return [];
+    const norm = (v) => String(v ?? "").trim();
+    const low = (v) => norm(v).toLowerCase();
+    const byRC = new Map(); let maxRow = 0;
+    for (const c of cells) { byRC.set(c.row + ":" + c.col, c.value); if (c.row > maxRow) maxRow = c.row; }
+    let headerRow = 0; const col = {};
+    for (let r = 1; r <= Math.min(maxRow, 40); r++) {
+      const found = {};
+      for (const c of cells) {
+        if (c.row !== r) continue;
+        const n = low(c.value);
+        if (n === "área" || n === "area") found.area = c.col;
+        else if (n === "scot") found.scot = c.col;
+        else if (n.startsWith("client")) found.cp = c.col;
+        else if (n.startsWith("data")) found.data = c.col;
+        else if (n === "deadline") found.deadline = c.col;
+        else if (n === "sheet") found.sheet = c.col;
+        else if (n === "área eqtl" || n === "area eqtl") found.areaEqtl = c.col;
+        else if (n.startsWith("respons")) found.resp = c.col;
+      }
+      if (found.area && found.sheet) { headerRow = r; Object.assign(col, found); break; }
+    }
+    if (!headerRow) return [];
+    const get = (r, c) => (c ? norm(byRC.get(r + ":" + c)) : "");
+    const rows = [];
+    for (let r = headerRow + 1; r <= maxRow; r++) {
+      const area = get(r, col.area), scot = get(r, col.scot), cp = get(r, col.cp);
+      if (!area && !scot && !cp) continue;
+      rows.push({ area, scot, client_portal: cp, data_solicitacao: get(r, col.data), deadline: get(r, col.deadline), sheet: get(r, col.sheet), area_eqtl: get(r, col.areaEqtl), responsavel: get(r, col.resp) });
+    }
+    return rows;
+  } catch (_) { return []; }
+}
