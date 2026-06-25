@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup · Dashboard — Entregas por empresa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Tokens DS v2 — copiados verbatim de styles/design-system.css
+   (teal/navy institucional, Roboto). Mockup standalone p/ validação.
+   ============================================================ */
+:root{
+  --blue:#246b78; --blue2:#134e5e; --cyan:#327984;
+  --purple:#3f7868; --pink:#71b280; --green:#71b280; --orange:#9abc72; --red:#e16464;
+  --radius:6px; --gap:18px;
+  --font:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+
+  /* Semáforo real — styles/tokens.css */
+  --st-recebido:#16a34a; --st-analise:#2563eb; --st-parcial:#ea580c;
+  --st-pendente:#d97706;  --st-na:#4f6072;
+}
+[data-theme="dark"]{
+  --bg:#071b20; --card-bg:#10343d; --card-head:#10343d;
+  --text:#f0f7f4; --text-muted:#9ab9b1; --text-dim:#638c83;
+  --border:rgba(113,178,128,.15); --divider:rgba(113,178,128,.10);
+  --input-bg:#0b2a33; --input-border:rgba(113,178,128,.15);
+  --hover:rgba(113,178,128,.08); --shadow:none; --grid-line:rgba(113,178,128,.10);
+  --card-border:rgba(113,178,128,.07); --cellbg:#0b2a33;
+}
+[data-theme="light"]{
+  --bg:#edf5f0; --card-bg:#ffffff; --card-head:#ffffff;
+  --text:#183a36; --text-muted:#5d756e; --text-dim:#718a83;
+  --border:#d9e8e0; --divider:#e4efe9;
+  --input-bg:#f4f8f5; --input-border:#d9e6df;
+  --hover:#f0f7f2; --shadow:0 3px 16px rgba(19,78,94,.08); --grid-line:#e1ece6;
+  --card-border:transparent; --cellbg:#f4f8f5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--font);
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  transition:background .2s ease;
+}
+
+/* ---------- moldura do mockup ---------- */
+.frame{max-width:1380px; margin:0 auto; padding:22px 26px 60px}
+.mock-bar{
+  display:flex; align-items:center; gap:14px; margin-bottom:18px;
+  color:var(--text-dim); font-size:12px;
+}
+.mock-bar .tag{
+  background:var(--input-bg); border:1px solid var(--border); border-radius:999px;
+  padding:4px 11px; color:var(--text-muted); font-weight:500;
+}
+.mock-bar .spacer{flex:1}
+.theme-btn{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  background:var(--input-bg); border:1px solid var(--input-border); color:var(--text-muted);
+  border-radius:var(--radius); padding:7px 13px; font:500 12.5px var(--font);
+  transition:background .15s ease, color .15s ease;
+}
+.theme-btn:hover{background:var(--hover); color:var(--text)}
+.theme-btn svg{width:15px;height:15px}
+
+/* ---------- sub-tabs do Dashboard (igual showDashboard) ---------- */
+.dash-tabs{display:flex; gap:4px; border-bottom:1px solid var(--divider); margin-bottom:20px}
+.dtab{
+  background:none; border:none; cursor:pointer; font:500 13.5px var(--font);
+  color:var(--text-muted); padding:11px 16px 13px; border-bottom:2px solid transparent;
+  margin-bottom:-1px; transition:color .15s ease;
+}
+.dtab:hover{color:var(--text)}
+.dtab.on{color:var(--text); border-bottom-color:var(--blue)}
+
+.page-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap}
+.page-head h1{font-size:19px; font-weight:700; letter-spacing:-.01em}
+.page-head .sub{color:var(--text-muted); font-size:12.5px; margin-top:3px}
+
+/* ---------- Card ---------- */
+.card{
+  min-width:0; max-width:100%;
+  background:var(--card-bg); border-radius:var(--radius);
+  box-shadow:var(--shadow); border:1px solid var(--card-border);
+}
+.card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:15px 18px 0}
+.card-head h3{font-size:14.5px; font-weight:500; color:var(--text)}
+.card-head .hint{font-size:11.5px; color:var(--text-dim)}
+.card-body{padding:14px 18px 18px}
+
+/* ---------- KPI / stat cards ---------- */
+.kpi-row{display:grid; grid-template-columns:repeat(5,1fr); gap:var(--gap); margin-bottom:var(--gap)}
+.stat{display:flex; align-items:center; gap:13px; padding:16px 18px}
+.stat .ico{width:46px;height:46px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff}
+.stat .ico svg{width:22px;height:22px}
+.stat .ico.c-total{background:var(--blue)}
+.stat .ico.c-ok{background:var(--st-recebido)}
+.stat .ico.c-pend{background:var(--st-pendente);color:#3a1f02}
+.stat .ico.c-emp{background:var(--purple)}
+.stat .ico.c-proc{background:var(--cyan)}
+.stat .s-label{color:var(--text-muted); font-size:12px; margin-bottom:3px}
+.stat .s-value{font-size:22px; font-weight:700; color:var(--text); line-height:1}
+.stat .s-value small{font-size:12.5px; font-weight:500; color:var(--text-dim); margin-left:2px}
+
+/* ---------- layout principal ---------- */
+.main{display:grid; grid-template-columns:1.62fr 1fr; gap:var(--gap); align-items:start}
+@media (max-width:1080px){ .main{grid-template-columns:1fr} .kpi-row{grid-template-columns:repeat(2,1fr)} }
+
+/* ---------- filtro de status (chips toggle) ---------- */
+.filters{display:flex; flex-wrap:wrap; gap:7px; align-items:center}
+.fchip{
+  cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-muted);
+  border-radius:999px; padding:5px 11px 5px 9px; font:500 12px var(--font);
+  display:inline-flex; align-items:center; gap:7px; transition:all .14s ease;
+}
+.fchip .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.fchip:hover{border-color:var(--text-dim); color:var(--text)}
+.fchip.on{color:var(--text); border-color:transparent; background:var(--hover); box-shadow:inset 0 0 0 1.5px currentColor}
+.fchip .n{color:var(--text-dim); font-variant-numeric:tabular-nums}
+
+/* ---------- matriz Empresa × Processo ---------- */
+.mx-scroll{overflow-x:auto; margin-top:4px}
+table.mx{border-collapse:separate; border-spacing:0; width:100%; font-variant-numeric:tabular-nums}
+.mx th, .mx td{padding:0}
+.mx thead th{
+  position:sticky; top:0; background:var(--card-bg); z-index:2;
+  font-size:11px; font-weight:500; color:var(--text-dim); text-align:center;
+  padding:0 4px 9px; vertical-align:bottom; line-height:1.25;
+}
+.mx thead th.corner{text-align:left}
+.mx thead th.col-tot, .mx td.tot{border-left:1px solid var(--divider)}
+.mx th.rh{
+  position:sticky; left:0; z-index:1; background:var(--card-bg);
+  text-align:left; font-size:12.5px; font-weight:500; color:var(--text);
+  padding:0 14px 0 2px; white-space:nowrap; vertical-align:middle;
+}
+.mx tbody tr{height:40px}
+.mx tbody tr:hover .rh{color:var(--blue)}
+
+.cell{
+  position:relative; height:34px; margin:2px; border-radius:5px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:600; cursor:pointer; user-select:none;
+  background:var(--cellbg); color:var(--text-dim);
+  transition:transform .12s ease, box-shadow .12s ease;
+  outline:none;
+}
+.cell.empty{cursor:default; color:var(--text-dim); opacity:.5; font-weight:400}
+.cell.has:hover{transform:translateY(-1px); box-shadow:0 0 0 2px var(--bg), 0 0 0 3.5px var(--blue)}
+.cell.has:focus-visible{box-shadow:0 0 0 2px var(--bg), 0 0 0 3.5px var(--blue)}
+.cell .comp{position:absolute;left:5px;right:5px;bottom:3px;height:3px;border-radius:2px;display:flex;overflow:hidden;opacity:.92}
+.cell .comp i{height:100%}
+.td-tot .cell{background:transparent;cursor:default;flex-direction:column;gap:3px;font-weight:700;color:var(--text)}
+.minibar{width:54px;height:5px;border-radius:3px;display:flex;overflow:hidden;background:var(--divider)}
+.minibar i{height:100%}
+
+/* ---------- gráfico: entregas por empresa (barras empilhadas) ---------- */
+.bars{display:flex;flex-direction:column;gap:11px}
+.bar-row{cursor:pointer}
+.bar-row .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.bar-row .nm{font-size:12.5px;color:var(--text)}
+.bar-row .tt{font-size:11.5px;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.bar-row .tt b{color:var(--st-pendente);font-weight:700}
+.track{height:14px;border-radius:4px;display:flex;overflow:hidden;background:var(--divider)}
+.track i{height:100%;transition:filter .14s ease}
+.bar-row:hover .track i{filter:brightness(1.08)}
+
+/* ---------- donut distribuição ---------- */
+.dist{display:flex;align-items:center;gap:18px}
+.dn-num{font-size:24px;font-weight:700;fill:var(--text)}
+.dn-lab{font-size:10.5px;fill:var(--text-dim)}
+.dleg{display:flex;flex-direction:column;gap:9px;flex:1}
+.dleg .row{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.dleg .row .sw{width:11px;height:11px;border-radius:3px;flex:none}
+.dleg .row .lb{color:var(--text-muted);flex:1}
+.dleg .row .vl{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.dleg .row .pc{color:var(--text-dim);font-size:11px;width:38px;text-align:right}
+
+/* ---------- tooltip + toast ---------- */
+#tip{
+  position:fixed; z-index:60; pointer-events:none; opacity:0; transform:translateY(4px);
+  transition:opacity .12s ease, transform .12s ease;
+  background:var(--card-bg); border:1px solid var(--border); border-radius:7px;
+  box-shadow:0 8px 28px rgba(0,0,0,.28); padding:10px 12px; min-width:178px; font-size:12px;
+}
+#tip.show{opacity:1; transform:translateY(0)}
+#tip .tt-h{font-weight:600;color:var(--text);margin-bottom:7px;font-size:12.5px}
+#tip .tt-r{display:flex;align-items:center;gap:8px;color:var(--text-muted);margin:3px 0}
+#tip .tt-r .sw{width:9px;height:9px;border-radius:50%;flex:none}
+#tip .tt-r .v{margin-left:auto;color:var(--text);font-weight:600}
+#tip .tt-f{margin-top:8px;padding-top:7px;border-top:1px solid var(--divider);color:var(--blue);font-size:11px;font-weight:500}
+#toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+  z-index:70; background:#0b303a; color:#eaf4f1; border:1px solid var(--border);
+  padding:11px 16px; border-radius:8px; font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,.3);
+  opacity:0; transition:opacity .2s ease, transform .2s ease; pointer-events:none; max-width:min(560px,92vw);
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+#toast b{color:#fff}
+.legend-note{margin-top:14px;font-size:11.5px;color:var(--text-dim);line-height:1.6}
+.legend-note b{color:var(--text-muted);font-weight:500}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="mock-bar">
+    <span class="tag">MOCKUP · não conectado</span>
+    <span>Dados ilustrativos — a tela real lê do parser (parseAbas) + Solicitações.</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" id="themeBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+      <span id="themeLbl">Tema claro</span>
+    </button>
+  </div>
+
+  <!-- sub-tabs do Dashboard (a 3ª é a nova) -->
+  <div class="dash-tabs">
+    <button class="dtab">Visão por status</button>
+    <button class="dtab">Usuários</button>
+    <button class="dtab on">Entregas por empresa</button>
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h1>Entregas por empresa</h1>
+      <div class="sub">Cada empresa × processo (campo <b>Área</b> das Solicitações). Filtre o status e clique numa célula para abrir a aba no item.</div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpis"></div>
+
+  <!-- principal -->
+  <div class="main">
+
+    <!-- HERO: matriz -->
+    <div class="card">
+      <div class="card-head">
+        <h3>Matriz · Empresa × Processo</h3>
+        <span class="hint" id="mxHint">Mostrando: total de itens</span>
+      </div>
+      <div class="card-body">
+        <div class="filters" id="filters"></div>
+        <div class="mx-scroll"><table class="mx" id="mx"></table></div>
+        <div class="legend-note">
+          <b>Como ler:</b> a intensidade da célula reflete a quantidade; a barrinha inferior mostra a composição de status.
+          Selecione um status acima para ver só ele. <b>Clique</b> (ou Enter) numa célula → abre a aba e seleciona a célula do item.
+        </div>
+      </div>
+    </div>
+
+    <!-- rail: barras + donut -->
+    <div style="display:flex;flex-direction:column;gap:var(--gap)">
+      <div class="card">
+        <div class="card-head">
+          <h3>Entregas por empresa</h3>
+          <span class="hint">ordenado por pendências</span>
+        </div>
+        <div class="card-body"><div class="bars" id="bars"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Distribuição por status</h3></div>
+        <div class="card-body"><div class="dist"><div id="donut"></div><div class="dleg" id="dleg"></div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   Dados ILUSTRATIVOS. Na tela real:
+   - empresas  = getCompanies()
+   - processos = campo Área das Solicitações (agrupando abas via sheet_link)
+   - contagens = parseAbas(...).byCompanyStatus / perSheet[].records
+   - célula    = record.row/col -> goToCell(pid, sid, r, c)
+   ============================================================ */
+const EMPRESAS = ["Equatorial Pará","Equatorial Maranhão","Equatorial Piauí","Equatorial Alagoas","Equatorial Goiás","Equatorial CEEE","Echoenergia","Eq. Transmissão"];
+const AREAS = [
+  {lbl:"Contingências", aba:"1.1 Contingências"},
+  {lbl:"Derivativos",   aba:"1.2 Derivativos"},
+  {lbl:"Imobilizado",   aba:"2.1 Imobilizado"},
+  {lbl:"Receita",       aba:"3.1 Receita"},
+  {lbl:"PECLD",         aba:"3.2 PECLD"},
+  {lbl:"Tributos",      aba:"4.1 Tributos"},
+  {lbl:"Partes Rel.",   aba:"5.1 Partes Relacionadas"},
+  {lbl:"Empréstimos",   aba:"6.1 Empréstimos"},
+];
+/* ordem = severidade (concluído -> mais crítico). chave casa com statusClassFor */
+const STATUS = [
+  {key:"recebido", lbl:"Recebido",   color:"#16a34a", ramp:["#EAF3DE","#C0DD97","#97C459","#173404"]},
+  {key:"analise",  lbl:"Em análise", color:"#2563eb", ramp:["#E6F1FB","#B5D4F4","#85B7EB","#042C53"]},
+  {key:"parcial",  lbl:"Parcial",    color:"#ea580c", ramp:["#FAECE7","#F5C4B3","#F0997B","#4A1B0C"]},
+  {key:"pendente", lbl:"Pendente",   color:"#d97706", ramp:["#FAEEDA","#FAC775","#EF9F27","#412402"]},
+  {key:"na",       lbl:"N/A",        color:"#4f6072", ramp:["#F1EFE8","#D3D1C7","#B4B2A9","#2C2C2A"]},
+];
+const RAMP_TOTAL = ["#E2EEEC","#AFD2C9","#6FB0A2","#0c3530"];
+const PENDENTES = ["analise","parcial","pendente"]; // contam como "precisa de ação"
+
+/* gerador determinístico (sem Math.random p/ ser estável entre reloads) */
+function rnd(i,j,a){ const x=Math.sin((i+1)*12.9898+(j+1)*78.233+a*37.17)*43758.5; return x-Math.floor(x); }
+const DATA = EMPRESAS.map((_,i)=>AREAS.map((_,j)=>{
+  if (rnd(i,j,9) < 0.13) return null; // alguns cruzamentos não existem
+  const d = {
+    recebido: Math.floor(rnd(i,j,2)*5),
+    analise:  Math.floor(rnd(i,j,4)*3),
+    parcial:  Math.floor(rnd(i,j,5)*2),
+    pendente: Math.floor(rnd(i,j,3)*3),
+    na:       Math.floor(rnd(i,j,6)*2),
+  };
+  if (Object.values(d).every(v=>v===0)) d.recebido = 1;
+  return d;
+}));
+/* hotspots narrativos: o "problema" que o usuário vai querer corrigir */
+DATA[5][0] = {recebido:0, analise:1, parcial:1, pendente:6, na:0}; // Eq. CEEE × Contingências
+DATA[5][5] = {recebido:1, analise:2, parcial:0, pendente:4, na:0}; // Eq. CEEE × Tributos
+DATA[6][2] = {recebido:0, analise:0, parcial:1, pendente:5, na:0}; // Echoenergia × Imobilizado
+
+const cellTotal = d => d ? STATUS.reduce((s,st)=>s+d[st.key],0) : 0;
+const cellPend  = d => d ? PENDENTES.reduce((s,k)=>s+d[k],0) : 0;
+
+let FILTER = "all"; // 'all' | status.key
+
+/* ---------------- KPIs ---------------- */
+function svgIco(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+p+'</svg>';}
+function renderKpis(){
+  let total=0, recebido=0, pend=0;
+  DATA.forEach(row=>row.forEach(d=>{ if(!d)return; total+=cellTotal(d); recebido+=d.recebido; pend+=cellPend(d); }));
+  const pct = total? Math.round(recebido/total*100):0;
+  const cards = [
+    {ico:'c-total', p:'<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/>', lbl:"Itens mapeados", val:total},
+    {ico:'c-ok',    p:'<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>', lbl:"Concluído (Recebido)", val:recebido+'<small>'+pct+'%</small>'},
+    {ico:'c-pend',  p:'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>', lbl:"Pendências (ação)", val:pend},
+    {ico:'c-emp',   p:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>', lbl:"Empresas", val:EMPRESAS.length},
+    {ico:'c-proc',  p:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>', lbl:"Processos (Áreas)", val:AREAS.length},
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(c=>
+    '<div class="card stat"><div class="ico '+c.ico+'">'+svgIco(c.p)+'</div>'+
+    '<div><div class="s-label">'+c.lbl+'</div><div class="s-value">'+c.val+'</div></div></div>').join('');
+}
+
+/* ---------------- filtro ---------------- */
+function renderFilters(){
+  let totAll=0; const byKey={}; STATUS.forEach(s=>byKey[s.key]=0);
+  DATA.forEach(row=>row.forEach(d=>{ if(!d)return; totAll+=cellTotal(d); STATUS.forEach(s=>byKey[s.key]+=d[s.key]); }));
+  const chip = (key,label,color,n)=>'<button class="fchip'+(FILTER===key?' on':'')+'" data-k="'+key+'" '+(color?'style="color:'+color+'"':'')+'>'+
+    (color?'<span class="dot" style="background:'+color+'"></span>':'<span class="dot" style="background:var(--blue)"></span>')+
+    '<span style="color:var(--text)">'+label+'</span><span class="n">'+n+'</span></button>';
+  let html = chip("all","Todos","",totAll);
+  STATUS.forEach(s=> html += chip(s.key,s.lbl,s.color,byKey[s.key]));
+  const el = document.getElementById('filters'); el.innerHTML = html;
+  el.querySelectorAll('.fchip').forEach(b=>b.onclick=()=>{ FILTER=b.dataset.k; renderFilters(); renderMatrix(); updateHint(); });
+}
+function updateHint(){
+  const s = STATUS.find(x=>x.key===FILTER);
+  document.getElementById('mxHint').textContent = "Mostrando: " + (s? "status "+s.lbl : "total de itens");
+}
+
+/* ---------------- matriz ---------------- */
+function maxForScale(){
+  let m=1;
+  DATA.forEach(row=>row.forEach(d=>{ if(!d)return; const v = FILTER==="all"? cellTotal(d) : d[FILTER]; if(v>m)m=v; }));
+  return m;
+}
+function rampIdx(v,max){ const r=v/(max||1); return r<=0.34?0 : r<=0.67?1 : 2; }
+function renderMatrix(){
+  const max = maxForScale();
+  const stSel = STATUS.find(x=>x.key===FILTER);
+  let thead = '<thead><tr><th class="corner rh">Empresa</th>';
+  AREAS.forEach(a=> thead += '<th>'+a.lbl+'</th>');
+  thead += '<th class="col-tot">Total</th></tr></thead>';
+
+  let tbody = '<tbody>';
+  EMPRESAS.forEach((emp,i)=>{
+    tbody += '<tr><th class="rh">'+emp+'</th>';
+    let rowTot=0, rowComp={};
+    STATUS.forEach(s=>rowComp[s.key]=0);
+    AREAS.forEach((a,j)=>{
+      const d = DATA[i][j];
+      const v = !d? 0 : (FILTER==="all"? cellTotal(d) : d[FILTER]);
+      if (d){ rowTot+=cellTotal(d); STATUS.forEach(s=>rowComp[s.key]+=d[s.key]); }
+      if (!d || v===0){ tbody += '<td><div class="cell empty">·</div></td>'; return; }
+      const ramp = FILTER==="all"? RAMP_TOTAL : stSel.ramp;
+      const idx = rampIdx(v,max);
+      let comp = '';
+      if (FILTER==="all"){
+        const t = cellTotal(d);
+        comp = '<div class="comp">'+STATUS.map(s=> s.key in d && d[s.key]? '<i style="background:'+s.color+';width:'+(d[s.key]/t*100)+'%"></i>':'').join('')+'</div>';
+      }
+      tbody += '<td><div class="cell has" tabindex="0" role="button" '+
+        'data-i="'+i+'" data-j="'+j+'" '+
+        'style="background:'+ramp[idx]+';color:'+ramp[3]+'">'+v+comp+'</div></td>';
+    });
+    // total da linha + minibar de composição
+    const bar = STATUS.map(s=> rowComp[s.key]? '<i style="background:'+s.color+';width:'+(rowComp[s.key]/rowTot*100)+'%"></i>':'').join('');
+    tbody += '<td class="tot td-tot"><div class="cell"><span>'+rowTot+'</span><span class="minibar">'+bar+'</span></div></td>';
+    tbody += '</tr>';
+  });
+  tbody += '</tbody>';
+  const t = document.getElementById('mx');
+  t.innerHTML = thead + tbody;
+  t.querySelectorAll('.cell.has').forEach(c=>{
+    c.addEventListener('click', ()=>goTo(+c.dataset.i,+c.dataset.j));
+    c.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();goTo(+c.dataset.i,+c.dataset.j);} });
+    c.addEventListener('mouseenter', e=>showTip(e,+c.dataset.i,+c.dataset.j));
+    c.addEventListener('mousemove', moveTip);
+    c.addEventListener('mouseleave', hideTip);
+  });
+}
+
+/* ---------------- barras: entregas por empresa ---------------- */
+function renderBars(){
+  const rows = EMPRESAS.map((emp,i)=>{
+    const agg={}; STATUS.forEach(s=>agg[s.key]=0); let tot=0;
+    AREAS.forEach((a,j)=>{ const d=DATA[i][j]; if(!d)return; STATUS.forEach(s=>agg[s.key]+=d[s.key]); tot+=cellTotal(d); });
+    return {emp,agg,tot,pend:PENDENTES.reduce((s,k)=>s+agg[k],0)};
+  }).sort((a,b)=>b.pend-a.pend);
+  document.getElementById('bars').innerHTML = rows.map(r=>{
+    const seg = STATUS.map(s=> r.agg[s.key]? '<i style="background:'+s.color+';width:'+(r.agg[s.key]/r.tot*100)+'%" title="'+s.lbl+': '+r.agg[s.key]+'"></i>':'').join('');
+    return '<div class="bar-row" data-emp="'+r.emp+'"><div class="top"><span class="nm">'+r.emp+'</span>'+
+      '<span class="tt"><b>'+r.pend+'</b> pend · '+r.tot+' itens</span></div><div class="track">'+seg+'</div></div>';
+  }).join('');
+  document.querySelectorAll('.bar-row').forEach(b=>b.onclick=()=>toast('Filtraria a matriz para <b>'+b.dataset.emp+'</b> (na tela real, foca a linha).'));
+}
+
+/* ---------------- donut: distribuição ---------------- */
+function renderDonut(){
+  const agg={}; let tot=0; STATUS.forEach(s=>agg[s.key]=0);
+  DATA.forEach(row=>row.forEach(d=>{ if(!d)return; STATUS.forEach(s=>agg[s.key]+=d[s.key]); tot+=cellTotal(d); }));
+  const r=54,c=2*Math.PI*r,cx=70,cy=70; let off=0,parts='';
+  STATUS.forEach(s=>{ const v=agg[s.key]; if(!v)return; const len=v/tot*c;
+    parts += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="17" stroke-dasharray="'+(len-2)+' '+(c-len+2)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+    off+=len; });
+  document.getElementById('donut').innerHTML =
+    '<svg viewBox="0 0 140 140" width="138" height="138">'+parts+
+    '<text x="70" y="66" text-anchor="middle" class="dn-num">'+tot+'</text><text x="70" y="84" text-anchor="middle" class="dn-lab">itens</text></svg>';
+  document.getElementById('dleg').innerHTML = STATUS.map(s=>{
+    const v=agg[s.key], pc=tot?Math.round(v/tot*100):0;
+    return '<div class="row"><span class="sw" style="background:'+s.color+'"></span><span class="lb">'+s.lbl+'</span><span class="vl">'+v+'</span><span class="pc">'+pc+'%</span></div>';
+  }).join('');
+}
+
+/* ---------------- tooltip + navegação ---------------- */
+const tip=document.getElementById('tip');
+function showTip(e,i,j){
+  const d=DATA[i][j]; if(!d)return;
+  let rows = STATUS.filter(s=>d[s.key]).map(s=>'<div class="tt-r"><span class="sw" style="background:'+s.color+'"></span>'+s.lbl+'<span class="v">'+d[s.key]+'</span></div>').join('');
+  tip.innerHTML = '<div class="tt-h">'+EMPRESAS[i]+' · '+AREAS[j].lbl+'</div>'+rows+
+    '<div class="tt-f">Clique → abrir "'+AREAS[j].aba+'" na célula</div>';
+  tip.classList.add('show'); moveTip(e);
+}
+function moveTip(e){ const pad=14, w=tip.offsetWidth, h=tip.offsetHeight;
+  let x=e.clientX+pad, y=e.clientY+pad;
+  if(x+w>innerWidth-8)x=e.clientX-w-pad; if(y+h>innerHeight-8)y=e.clientY-h-pad;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function hideTip(){ tip.classList.remove('show'); }
+function goTo(i,j){
+  const d=DATA[i][j]; const stTxt = FILTER==="all"? cellTotal(d)+" itens" : d[FILTER]+" "+STATUS.find(x=>x.key===FILTER).lbl;
+  toast('Abrindo aba <b>'+AREAS[j].aba+'</b> → seleciona a célula de <b>'+EMPRESAS[i]+'</b> ('+stTxt+').');
+}
+
+/* ---------------- toast + tema ---------------- */
+let toT;
+function toast(html){ const t=document.getElementById('toast'); t.innerHTML=html; t.classList.add('show'); clearTimeout(toT); toT=setTimeout(()=>t.classList.remove('show'),2600); }
+document.getElementById('themeBtn').onclick=()=>{
+  const dark = document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme', dark?'light':'dark');
+  document.getElementById('themeLbl').textContent = dark? 'Tema escuro':'Tema claro';
+  renderDonut(); // re-pinta o texto central do SVG (usa currentColor de var)
+};
+
+/* ---------------- init ---------------- */
+renderKpis(); renderFilters(); renderMatrix(); renderBars(); renderDonut(); updateHint();
+</script>
+</body>
+</html>
