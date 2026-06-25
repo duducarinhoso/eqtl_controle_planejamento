@@ -104,16 +104,38 @@ function cmp(a, b, col) {
 }
 
 /* ---------------- popover ---------------- */
-function closePop() { document.querySelectorAll(".dd-pop,.col-menu").forEach((e) => e.remove()); if (S && S._popClose) { document.removeEventListener("mousedown", S._popClose); S._popClose = null; } }
+function closePop() {
+  document.querySelectorAll(".dd-pop,.col-menu").forEach((e) => e.remove());
+  if (S && S._popClose) { document.removeEventListener("mousedown", S._popClose); S._popClose = null; }
+  if (S && S._popScroll) { window.removeEventListener("scroll", S._popScroll, true); window.removeEventListener("resize", S._popScroll); S._popScroll = null; }
+}
 function showPop(pop, anchor, w = 280) {
   const r = anchor.getBoundingClientRect();
+  const margin = 8;
   pop.style.position = "fixed";
-  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
-  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - 80) + "px";
+  pop.style.visibility = "hidden";   // medir a altura real antes de posicionar
+  pop.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)) + "px";
+  pop.style.top = margin + "px";
   (root || document.body).appendChild(pop);   // dentro do .gp-root: o CSS escopado se aplica
+  // abre abaixo da âncora; se não couber, abre para cima (flip) — evita ser cortado no rodapé
+  const ph = pop.offsetHeight;
+  let top = r.bottom + 4;
+  if (top + ph > window.innerHeight - margin) {
+    const acima = r.top - 4 - ph;
+    top = acima >= margin ? acima : Math.max(margin, window.innerHeight - ph - margin);
+  }
+  pop.style.top = top + "px";
+  pop.style.visibility = "";
   const close = (e) => { if (!pop.contains(e.target)) closePop(); };
+  // rolar a tela fecha a lista (antes ela ficava fixa sobre o conteúdo); ignora o scroll dentro da própria lista
+  const onScroll = (e) => { if (!pop.contains(e.target)) closePop(); };
   S._popClose = close;
-  setTimeout(() => document.addEventListener("mousedown", close), 0);
+  S._popScroll = onScroll;
+  setTimeout(() => {
+    document.addEventListener("mousedown", close);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+  }, 0);
 }
 
 /* ======================= DRAW ======================= */

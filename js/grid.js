@@ -583,8 +583,6 @@ export class Grid {
     const rect = td.getBoundingClientRect();
     const menu = document.createElement("div");
     menu.className = "ctx-menu";
-    menu.style.left = rect.left + "px";
-    menu.style.top = rect.bottom + "px";
     menu.style.minWidth = Math.max(150, rect.width) + "px";
     for (const opt of this.statusOptionsFor(c)) {
       const b = document.createElement("button");
@@ -597,21 +595,40 @@ export class Grid {
     clr.innerHTML = `<span class="muted" style="font-family:var(--font-ui);font-size:11px">— limpar —</span>`;
     clr.onclick = () => { this.closeStatusMenu(); this.setValue(r, c, ""); };
     menu.appendChild(clr);
+    menu.style.visibility = "hidden";   // medir antes de posicionar
     document.body.appendChild(menu);
     this._statusMenu = menu;
+    // posiciona abaixo da célula; se não couber, abre para cima (flip) e mantém dentro da viewport
+    const margin = 8;
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = Math.max(margin, Math.min(rect.left, window.innerWidth - mw - margin));
+    let top = rect.bottom;
+    if (top + mh > window.innerHeight - margin) {
+      const acima = rect.top - mh;
+      top = acima >= margin ? acima : Math.max(margin, window.innerHeight - mh - margin);
+    }
+    menu.style.left = left + "px";
+    menu.style.top = top + "px";
+    menu.style.visibility = "";
     const close = (e) => { if (!menu.contains(e.target)) this.closeStatusMenu(); };
     // navegar pelo teclado (setas/Tab/Esc) FECHA a lista — antes ela ficava aberta
     const onKey = (e) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); }
       this.closeStatusMenu();
     };
+    // rolar/redimensionar fecha a lista (antes ficava fixa sobre o conteúdo); ignora scroll dentro da lista
+    const onScroll = (e) => { if (!menu.contains(e.target)) this.closeStatusMenu(); };
     this._statusMenuCleanup = () => {
       document.removeEventListener("mousedown", close);
       document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
     };
     setTimeout(() => {
       document.addEventListener("mousedown", close);
       document.addEventListener("keydown", onKey, true);
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
     }, 0);
   }
 
