@@ -15,6 +15,9 @@ seed_data.json
 .env
 .env.*
 config.local.js
+# Report Gerencial: info interna de negocio (engagement/volumetria EY) — manter LOCAL, fora do repo publico
+_Report Gerencial/
+**/_Report Gerencial/
 
 # Dependências (não usamos, mas por segurança)
 node_modules/
