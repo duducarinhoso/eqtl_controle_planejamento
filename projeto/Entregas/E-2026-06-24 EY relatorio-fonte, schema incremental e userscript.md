@@ -8,9 +8,9 @@ itens: ["[[I-0001 Criar tabela ey_engagements no Supabase]]", "[[I-0003 Filtro d
 Sessão dedicada à integração EY Canvas: a fonte de verdade virou o **relatório**, o schema incremental no Supabase foi completado e validado, e o veículo de coleta (userscript) foi construído. **Engagements já coletados de verdade**; solicitações/documentos ainda não (→ [[I-0009 Fazer 1a coleta real EY e validar volumetria]]).
 
 ## Descobertas (API EY Canvas)
-- **Catálogo:** `GET https://eycanvasapp.ey.com/api/v2/engagements.json` (host global, token `cea-prd-app`) — lista todos os engagements (id, nome, `Domain`, `Groups`).
-- **Solicitações:** `ClientRequests.json?...&engagementid=` (token `cea-prd-us-app`); `quickfilter=3` traz só 174 ("Exceptional").
-- **Relatório:** `GET https://eycanvasapp-us.ey.com/api/v2/reports.json/{engId}?engagementid={engId}` devolve o **.xlsx** (abas View by tag + View by document). Buscado por `fetch` fica **em memória — SEM o diálogo "Salvar como"** (provado: ~153 KB, assinatura `PK\x03\x04`). O diálogo só aparece quando o navegador *baixa* (clicar em "Gerar relatório").
+- **Catálogo:** `GET [endpoint interno EY]/engagements.json` (host global, token `[escopo EY]`) — lista todos os engagements (id, nome, `Domain`, `Groups`).
+- **Solicitações:** `ClientRequests.json?...&engagementid=` (token `[escopo EY]`); `quickfilter=3` traz só 174 ("Exceptional").
+- **Relatório:** `GET [endpoint interno EY]/reports.json/{engId}?engagementid={engId}` devolve o **.xlsx** (abas View by tag + View by document). Buscado por `fetch` fica **em memória — SEM o diálogo "Salvar como"** (provado: ~153 KB, assinatura `PK\x03\x04`). O diálogo só aparece quando o navegador *baixa* (clicar em "Gerar relatório").
 - **Auth/CSP:** a API exige token Azure AD (MSAL) da sessão logada; o domínio do EY bloqueia por CSP **tanto** carregar SheetJS (esm.sh) **quanto** falar com o Supabase → coleta+parse+gravação precisam de um veículo no browser (userscript com `GM_xmlhttpRequest`).
 
 ## Decisão da sessão

@@ -18,6 +18,8 @@ config.local.js
 # Report Gerencial: info interna de negocio (engagement/volumetria EY) — manter LOCAL, fora do repo publico
 _Report Gerencial/
 **/_Report Gerencial/
+# tools/: material de integracao EY com infra interna (hosts/tenant/client_id/escopos de token). Repo e publico e o app NAO usa tools/ → manter LOCAL.
+tools/
 
 # Dependências (não usamos, mas por segurança)
 node_modules/
