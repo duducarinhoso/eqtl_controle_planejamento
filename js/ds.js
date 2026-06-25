@@ -178,6 +178,10 @@ function setupSidebar(){
   sidebar.addEventListener('mouseleave',()=>{
     indicator.style.opacity='0';
     closeUserMenu();
+    // Ao sair com o mouse, libera o foco preso dentro da sidebar para que o
+    // :focus-within solte e ela recolha na hora (antes só recolhia ao clicar fora).
+    // Não interfere na navegação por teclado: Tab não dispara mouseleave.
+    if(sidebar.contains(document.activeElement))document.activeElement.blur();
   });
   sidebar.addEventListener('focusout',event=>{
     if(!sidebar.contains(event.relatedTarget)){
