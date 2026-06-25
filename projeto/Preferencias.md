@@ -1,5 +1,5 @@
 ---
-data_atualizacao: 2026-06-24
+data_atualizacao: 2026-06-25
 tipo: preferencias
 ---
 
@@ -39,7 +39,7 @@ O Eduardo cansou de retrabalho por eu ajustar elemento isolado sem consultar o m
 
 ## Git & comunicação
 
-- **Git é exclusivo do Eduardo.** O agente nunca commita/branch/merge/push; só descreve em português o que ele deve rodar. — *origem: preferência transversal*
+- **Git: o agente pode fazer qualquer operação, desde que o Eduardo concorde.** Commit, branch, merge e push liberados mediante aval explícito dele (mensagem de commit em português); nada no git acontece sem que ele concorde. — *origem: ajuste 2026-06-25 (antes: commit/push só quando pedido; antes disso, git era exclusivo do Eduardo)*
 - **Continuidade entre máquinas via git.** Por isso `projeto/` e `.claude/skills/` ficam **versionados** (fora do `.gitignore`); o checkpoint + push fecham a sessão, o pull + leitura do `Central.md` abrem a próxima.
 - **Tudo em português**, mensagens de commit incluídas (sem Conventional Commits em inglês obrigatório).
 - **Não inventar fatos na Central.** Só entra o que foi confirmado pelo Eduardo ou já está implementado; em dúvida, perguntar. Sincronizar Central ↔ código é dever.

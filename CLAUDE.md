@@ -11,7 +11,7 @@ Portal interno de controle de solicitações de auditoria/planejamento contábil
 - **Preferências** do Eduardo: `projeto/Preferencias.md`
 
 ## Regras de ouro
-- **Git é do Eduardo.** O agente nunca commita/branch/push; descreve em português o que ele deve rodar. A continuidade entre máquinas é por git (`projeto/` e `.claude/skills/` são versionados de propósito).
+- **Git: o agente pode fazer qualquer operação (commit, branch, merge, push), desde que o Eduardo concorde.** Mensagem de commit em português. Nada no git acontece sem o aval explícito dele. A continuidade entre máquinas é por git (`projeto/` e `.claude/skills/` são versionados de propósito).
 - **Sem framework, sem build step.** App servido estático (GitHub Pages). Não introduzir Node/npm/bundler sem decisão explícita. Dev local: `start.bat` (porta 5500).
 - **Verificação é no browser** (dark + light); não há framework de testes.
 - **Usar os modelos de `modelos/` à risca** como fonte de design — não recriar do zero.

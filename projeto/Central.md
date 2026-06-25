@@ -1,5 +1,5 @@
 ---
-data_atualizacao: 2026-06-24
+data_atualizacao: 2026-06-25
 tipo: hub-projeto
 ---
 
@@ -32,7 +32,7 @@ tipo: hub-projeto
 - **Integração EY Canvas (Fase 5)** — backend **completo e validado** (relatório como fonte; `ey_engagements` populada; RPCs `ey_sync`/`ey_sync_documents`/`ey_sync_engagements`; userscript). Falta: **portar a UI + botão "Executar"** ([[I-0002 Portar UI de extracao EY para o app]]) e a **1ª coleta real** de solicitações/documentos ([[I-0009 Fazer 1a coleta real EY e validar volumetria]]). Filtro 174/253 resolvido pela troca de fonte ([[D-0003 Relatorio EY como fonte unica e chave composta]]).
 - **Design System v2 (Fase 6)** — 🔨 **em migração** (virou o foco): shell + sidebar + Projetos já no modelo; falta a **tela do projeto integrada** ([[I-0010 Tela do projeto integrada no shell do modelo]]), telas leves ([[I-0011 Migrar telas leves restantes ao DS v2]]), **grade** ([[I-0012 Re-tematizar a grade (planilha) ao DS v2]]) e login/splash ([[I-0013 Alinhar login e splash ao DS v2]]). Guarda-chuva: [[I-0005 Propagar paleta DS v2 e auditar contraste WCAG AA]].
 - **Cronograma (Fase 7)** — placeholder na home; escopo a definir.
-- **Trabalho não commitado** — home, EY (store/import/tools), DS v2 e a própria Central aguardam commit do Eduardo.
+- **Trabalho não commitado** — home, EY (store/import/tools), DS v2 e a própria Central aguardam commit/push (o agente pode fazê-lo mediante aval do Eduardo).
 
 ## 🎯 Próximos passos imediatos
 
@@ -108,4 +108,4 @@ tipo: hub-projeto
 - **Decisões** → `Decisoes/` · **Entregas** → `Entregas/` · **Itens** → `Itens/` · **Planos** → `planos/`
 
 ---
-*Última atualização: 2026-06-24 (painel de skills de design vendorizado + roteamento na Central).*
+*Última atualização: 2026-06-25 (regra de git ajustada: agente pode qualquer operação de git mediante aval do Eduardo).*
