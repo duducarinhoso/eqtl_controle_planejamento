@@ -11,14 +11,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Montserrat:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 
   <!-- Design System v2 (modelos/design-system_v2.html) — CSS verbatim do modelo -->
-  <link rel="stylesheet" href="styles/design-system.css" />
+  <!-- ?v=N = numero de versao para cache. Ao publicar mudancas, suba o N (mesmo numero em todos abaixo + no importmap/app.js). -->
+  <link rel="stylesheet" href="styles/design-system.css?v=12" />
 
-  <link rel="stylesheet" href="styles/tokens.css" />
-  <link rel="stylesheet" href="styles/app.css" />
-  <link rel="stylesheet" href="styles/login.css" />
-  <link rel="stylesheet" href="styles/home.css" />
-  <link rel="stylesheet" href="styles/app-ds.css" />
-  <link rel="stylesheet" href="styles/solic.css" />
+  <link rel="stylesheet" href="styles/tokens.css?v=12" />
+  <link rel="stylesheet" href="styles/app.css?v=12" />
+  <link rel="stylesheet" href="styles/login.css?v=12" />
+  <link rel="stylesheet" href="styles/home.css?v=12" />
+  <link rel="stylesheet" href="styles/app-ds.css?v=12" />
+  <link rel="stylesheet" href="styles/solic.css?v=12" />
 </head>
 <body>
   <!-- estado de carregamento inicial -->
@@ -31,11 +32,31 @@
   <div id="app-root" hidden></div>
 
   <!-- carrega config (copie config.example.js -> config.js) -->
-  <script src="config.js"></script>
+  <script src="config.js?v=12"></script>
   <!-- Chart.js + JS do modelo (charts/gauges/sparklines/sidebar/tema) verbatim -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script defer src="js/ds.js?v=4"></script>
+  <script defer src="js/ds.js?v=12"></script>
+
+  <!-- Cache-busting de TODOS os modulos JS num so lugar. O app.js importa estes
+       arquivos sem ?v=; o importmap reescreve cada um para a versao carimbada.
+       AO PUBLICAR UMA MUDANCA: troque o numero 12 por 13 (aqui, nos <link> acima,
+       no config.js/ds.js e no app.js abaixo). O navegador de todos baixa de novo. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/supabase.js": "./js/supabase.js?v=12",
+      "./js/auth.js": "./js/auth.js?v=12",
+      "./js/store.js": "./js/store.js?v=12",
+      "./js/grid.js": "./js/grid.js?v=12",
+      "./js/realtime.js": "./js/realtime.js?v=12",
+      "./js/excel.js": "./js/excel.js?v=12",
+      "./js/parser.js": "./js/parser.js?v=12",
+      "./js/solic.js": "./js/solic.js?v=12",
+      "./js/util.js": "./js/util.js?v=12"
+    }
+  }
+  </script>
   <!-- ponto de entrada -->
-  <script type="module" src="js/app.js?v=11"></script>
+  <script type="module" src="js/app.js?v=12"></script>
 </body>
 </html>
