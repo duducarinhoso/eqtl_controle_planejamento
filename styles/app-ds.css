@@ -489,3 +489,14 @@ table.umx th.u-click:hover{ background:var(--hover); }
 table.umx th.u-col{ vertical-align:bottom; }
 table.umx th.u-col .av{ margin:0 auto 4px; }
 table.umx th.u-col .u-col-nm{ display:block; max-width:78px; margin:0 auto; font-size:10.5px; font-weight:400; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* =====================================================================
+   GRADE (planilha) — espelho do Excel: renderiza SEMPRE clara, independente
+   do tema do app. O modo escuro fazia o texto-padrão da célula herdar
+   var(--text) (claro) e sumir no fundo branco. Aqui só restauramos o
+   texto/canvas padrão escuro-sobre-claro; a formatação POR CÉLULA do
+   usuário (cores inline) continua vencendo — nada da estrutura muda.
+   (Re-tematização própria da grade = item I-0012, à parte.)
+   ===================================================================== */
+.proj-main #grid-scroll:not(.dash):not(.solic){ background:var(--workspace-bg); color:var(--on-surface); }
+.proj-main table.grid td.cell .cc{ color:var(--on-surface); }
