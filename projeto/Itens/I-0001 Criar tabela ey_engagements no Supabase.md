@@ -17,4 +17,4 @@ O catálogo de engagements da EY (`ey_engagements`) tem o SQL pronto em `tools/e
 **Ação:** executar o DDL de `ey_engagements` (+ RPC `ey_sync_engagements`) no Supabase via MCP/console. Verificar com `listEyEngagements()` no app.
 
 ## Desfecho (2026-06-24)
-`ey_engagements` **criada** no Supabase (+ RPC `ey_sync_engagements`, que registra a execução) e **populada com dados reais**: 2 engagements (8780577 FY27 · 8647880 RESTORE), via run 5 (`eduardo.rocha@equatorialenergia.com.br`, `kind=engagements`). Ver [[E-2026-06-24 EY relatorio-fonte, schema incremental e userscript]].
+`ey_engagements` **criada** no Supabase (+ RPC `ey_sync_engagements`, que registra a execução) e **populada com dados reais**: 2 engagements (FY27 · RESTORE), via run 5 (`[e-mail removido]`, `kind=engagements`). Ver [[E-2026-06-24 EY relatorio-fonte, schema incremental e userscript]].

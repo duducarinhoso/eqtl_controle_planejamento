@@ -31,7 +31,7 @@ Identificadores fixos do ambiente:
 | 0 | **Entrada** — abre `https://eycanvas.ey.com/` | transitório | host `eycanvas.ey.com` por instantes; decide redirecionar | aguardar redirecionamento | — |
 | 1 | **Login Microsoft (senha)** | 🔴 gate (usuário) | host `login.microsoftonline.com`, path `/{tenant}/oauth2/v2.0/authorize`, título "Entrar em sua conta", campo `input[type=password]`, heading "Insira a senha" | usuário digita a senha e clica "Entrar" | client_id do Canvas `f66aa824-…`; redirect_uri `https://eycanvas.ey.com/` |
 | 2 | **MFA — PingID** | 🔴 gate (usuário) | host `authenticator.pingone.eu`, path `/pingid/ppm/auth`, título "PingID", heading "Azure AD" + "Digite o código…", campo de código, botão "Iniciar Sessão" | usuário digita o código do autenticador e clica "Iniciar Sessão" | — |
-| 3 | **Canvas logado — Home / Painel** | ✅ marco | host `eycanvas.ey.com`, path `/`, título "EY Canvas Client Portal", texto "Bem-vindo …"; token `cea-prd-us-app` no localStorage (não expirado) | clicar "Visualizar solicitações" do engagement | lista de engagements (2): FY27=8780577, RESTORE FY26=8647880 |
+| 3 | **Canvas logado — Home / Painel** | ✅ marco | host `eycanvas.ey.com`, path `/`, título "EY Canvas Client Portal", texto "Bem-vindo …"; token `cea-prd-us-app` no localStorage (não expirado) | clicar "Visualizar solicitações" do engagement | lista de engagements (2): FY27=ENG-A, RESTORE FY26=ENG-B |
 | 4 | _(a mapear)_ Lista de solicitações do engagement | — | provável host `eycanvasclientportal-us.ey.com`, path `/requests/...?engagementid=` | abrir menu ▸ relatório | engagementId aparece na URL |
 | 6 | _(a mapear)_ **Tela de emitir relatório** | 🎯 final | … | clicar "Gerar relatório" (ou pular via API) | — |
 
@@ -59,12 +59,12 @@ Campos por item: `EngagementId, EngagementName, Domain, EngagementStatusId, IsEn
 
 | EngagementId | Nome | Domain | StatusId |
 |---|---|---|---|
-| 8780577 | FY27 - Grupo Equatorial S.A. - AUD 2026 | eycanvasclientportal-us.ey.com | 1 (ativo) |
-| 8647880 | RESTORE - FY26 - GRUPO EQUATORIAL AUD 2025 | eycanvasclientportal-us.ey.com | 7 (restore) |
+| ENG-A | FY27 - Grupo Equatorial S.A. - AUD 2026 | eycanvasclientportal-us.ey.com | 1 (ativo) |
+| ENG-B | RESTORE - FY26 - GRUPO EQUATORIAL AUD 2025 | eycanvasclientportal-us.ey.com | 7 (restore) |
 
 → Útil no "Executar": chamar este endpoint para o usuário **escolher o engagement** e descobrir o host de destino, antes de extrair.
 
-**Rota é genérica por `engagementid`** (testado): extrair o engagement 8647880 a partir da própria home (`eycanvas.ey.com`) deu `HTTP 200`, `totalCount 0` (RESTORE FY26 está vazio). Mesmo endpoint/host/token do 8780577 — só troca o `engagementid`. A home já chama `eycanvasapp-us.ey.com`, então a extração funciona de qualquer uma das telas logadas.
+**Rota é genérica por `engagementid`** (testado): extrair o engagement ENG-B a partir da própria home (`eycanvas.ey.com`) deu `HTTP 200`, `totalCount 0` (RESTORE FY26 está vazio). Mesmo endpoint/host/token do ENG-A — só troca o `engagementid`. A home já chama `eycanvasapp-us.ey.com`, então a extração funciona de qualquer uma das telas logadas.
 
 ## TODO — persistir engagements no banco (⛔ NÃO executar agora; fazer após mapear)
 Motivo: engagements podem **sumir** da lista depois (encerrados/arquivados). Queremos um catálogo no

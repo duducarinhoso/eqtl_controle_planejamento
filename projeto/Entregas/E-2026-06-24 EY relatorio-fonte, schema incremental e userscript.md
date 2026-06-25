@@ -17,7 +17,7 @@ Sessão dedicada à integração EY Canvas: a fonte de verdade virou o **relató
 **Relatório como fonte única** (ver [[D-0003 Relatorio EY como fonte unica e chave composta]]): traz o conjunto completo (253) + os documentos numa só busca sem diálogo. Como o relatório não tem `client_request_id`, a chave passou a ser a composta **`engagement|#|grupo`** (a chave oficial do projeto antigo).
 
 ## Banco (Supabase `scsxisjvtfsqayujfgvd`)
-- **`ey_engagements`** criada (+ RPC `ey_sync_engagements`) e **populada com dados reais**: 2 engagements (8780577 FY27 ativo · 8647880 RESTORE), execução registrada (run 5, `eduardo.rocha@equatorialenergia.com.br`, `kind=engagements`).
+- **`ey_engagements`** criada (+ RPC `ey_sync_engagements`) e **populada com dados reais**: 2 engagements (FY27 ativo · RESTORE), execução registrada (run 5, `[e-mail removido]`, `kind=engagements`).
 - **`ey_requests` re-chaveada**: PK `chave` (`eng|#|grupo`); `client_request_id` agora opcional; novas colunas `in_portal`, `content_hash`, `tracked` (jsonb dos 8 campos rastreados), `first_seen_at`, `received_first_seen`, `priority`, `tag_name`, `ey_documents`, `client_documents`.
 - **`ey_request_documents`** (aba View by document, 1:N) — ligada pela `chave`; `document_name/type`, `file_extension`, `uploaded_by`, `upload_date`.
 - **`ey_request_changes`** (log campo-a-campo) e **`ey_sync_runs`** (histórico: `kind`, `run_by_label`, `source`, contadores → quem/quando/o quê).

@@ -184,8 +184,8 @@
 
 // --- engagements mapeados (depois virão da tabela ey_engagements) ---
 const ENGAGEMENTS = [
-  { id:8780577, name:'FY27 - Grupo Equatorial S.A. - AUD 2026', status:'Ativo',   statusKind:'ok',   total:253, domain:'eycanvasclientportal-us.ey.com' },
-  { id:8647880, name:'RESTORE - FY26 - GRUPO EQUATORIAL AUD 2025', status:'Restore', statusKind:'warn', total:0,   domain:'eycanvasclientportal-us.ey.com' },
+  { id:1001, name:'FY27 - Grupo Equatorial S.A. - AUD 2026', status:'Ativo',   statusKind:'ok',   total:253, domain:'eycanvasclientportal-us.ey.com' },
+  { id:1002, name:'RESTORE - FY26 - GRUPO EQUATORIAL AUD 2025', status:'Restore', statusKind:'warn', total:0,   domain:'eycanvasclientportal-us.ey.com' },
 ];
 
 // --- estados do caminho até "pronto" (Etapas 1..3 do mapa) ---
@@ -344,7 +344,7 @@ $('btnContinue').onclick = startExtract;
 $('btnRestart').onclick = resetAll;
 // simulação
 $('simRestart').onclick = resetAll;
-$('simSkip').onclick = () => { clearTimeout(timer); if($('phaseSelect').classList.contains('hidden')===false){ if(!selected.size){selected.add(8780577);renderEngs();syncRun();} } goPhase('track'); renderStepper(); applyState('ready', 'Tudo certo — você está <b>autenticado</b> e pronto para extrair.'); $('confirm').classList.add('show'); };
+$('simSkip').onclick = () => { clearTimeout(timer); if($('phaseSelect').classList.contains('hidden')===false){ if(!selected.size){selected.add(1001);renderEngs();syncRun();} } goPhase('track'); renderStepper(); applyState('ready', 'Tudo certo — você está <b>autenticado</b> e pronto para extrair.'); $('confirm').classList.add('show'); };
 $('simImpulse').onclick = () => { if(current && current!=='ready'){ showOff('Você abriu um engagement no portal — sem problema, continuamos a rota a partir de onde você está.'); } else { showOff('Você abriu um engagement — você já está logado, então seguimos direto para a extração.'); } };
 $('simLost').onclick = () => { clearTimeout(timer); showOff('Você saiu da rota (tela desconhecida). Reabrindo o portal para retomar o login…'); setTimeout(startTrack, 1200); };
 
