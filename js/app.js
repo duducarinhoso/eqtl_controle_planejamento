@@ -111,7 +111,7 @@ async function refreshOnline() {
   try { rows = await store.loadOnline(); } catch (_) {}
   App._appPeers = rows.map((r) => {
     const p = App.profilesMap.get(r.user_id) || {};
-    return { id: r.user_id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, email: p.email, color: p.color, loc: r.loc || {} };
+    return { id: r.user_id, name: titleCase(p.display_name || p.full_name || "Usuário"), full_name: p.full_name, email: p.email, color: p.color, loc: r.loc || {} };
   });
   renderAppPresence();
   updateCellPresence();
@@ -233,6 +233,14 @@ async function reloadAreas() {
 }
 
 /* avatar: foto se houver, senão iniciais */
+/* Nome de exibição: Title Case (Primeira Letra Maiúscula por palavra), independente
+   de como foi digitado; conectores curtos ficam em minúsculas. */
+function titleCase(s) {
+  const small = new Set(["de", "da", "do", "das", "dos", "e", "di", "du", "del", "la", "van", "von"]);
+  return String(s || "").trim().toLowerCase().split(/\s+/)
+    .map((w, i) => (i > 0 && small.has(w)) ? w : (w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
 function avatarEl(u, size = 30) {
   const name = u.display_name || u.full_name || u.name || "?";
   const el = h("div", { class: "av", style: {
@@ -670,6 +678,7 @@ function buildModuleShell(activeItem) {
       const on = it.key === activeItem;
       const a = h("a", on ? { href: it.route, class: "active", "aria-current": "page" } : { href: it.route });
       a.innerHTML = (ITEM_IC[it.key] || "") + '<span class="menu-label">' + escapeHtml(it.label) + "</span>";
+      a.addEventListener("click", () => document.getElementById("sidebar")?.classList.remove("open"));   // fecha o off-canvas ao navegar (mobile)
       menu.appendChild(a);
     });
   });
@@ -682,7 +691,7 @@ function buildModuleShell(activeItem) {
     h("a", { href: "#", role: "menuitem", onClick: (e) => { e.preventDefault(); supabase.auth.signOut(); } }, "Sair"));
   const trigger = h("button", { class: "sidebar-trigger", id: "sidebarUserTrigger", type: "button", "aria-expanded": "false", "aria-controls": "sidebarUserMenu" },
     h("span", { class: "sidebar-avatar" }, initials(p.display_name || p.full_name || "?")),
-    h("span", { class: "sidebar-user-info" }, h("strong", {}, p.display_name || p.full_name || "Usuário"), h("span", {}, roleLabel())),
+    h("span", { class: "sidebar-user-info" }, h("strong", {}, titleCase(p.display_name || p.full_name || "Usuário")), h("span", {}, roleLabel())),
     h("span", { class: "sidebar-chevron", id: "sidebarChevron", "aria-hidden": "true",
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>' }));
 
@@ -699,7 +708,10 @@ function buildModuleShell(activeItem) {
   const search = h("div", { class: "search" });
   search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>';
   search.appendChild(h("input", { type: "search", placeholder: "Buscar…", onfocus: () => openGlobalSearch() }));
-  const topbar = h("div", { class: "topbar" }, search);
+  const burger = h("button", { class: "topbar-burger", "aria-label": "Mostrar menu", title: "Mostrar menu",
+    onClick: () => document.getElementById("sidebar")?.classList.toggle("open"),
+    html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' });
+  const topbar = h("div", { class: "topbar" }, burger, search);
   const pageRow = h("div", { class: "page-row" },
     h("h1", { id: "page-title" }, meta.title),
     h("div", { class: "crumb", id: "page-crumb" }, meta.crumb));
@@ -1243,7 +1255,7 @@ async function renderDashEmpresa(body) {
     h("div", { class: "card-body" },
       h("div", { class: "emp-filters", id: "emp-filters" }),
       h("div", { class: "emp-mx-scroll" }, h("table", { class: "emp-mx", id: "emp-mx" })),
-      h("p", { class: "emp-note" }, "Clique (ou Enter) numa célula → abre a aba e seleciona a célula do item.")));
+      h("p", { class: "emp-note" }, "Os Totais (linha e geral) contam itens distintos. A soma das colunas pode passar do total geral — um item cuja aba tem mais de uma Área aparece em cada coluna de processo. Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
   const rail = h("div", { class: "emp-rail" },
     h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", {}, "Entregas por empresa"), h("span", { class: "hint" }, "ordenado por pendências")), h("div", { class: "card-body" }, h("div", { class: "emp-bars", id: "emp-bars" }))));
   main.appendChild(mxCard); main.appendChild(rail);
@@ -1254,19 +1266,16 @@ async function renderDashEmpresa(body) {
 
 /* empresas exibidas conforme o filtro por empresa (App.empCompany = null => todas) */
 function empCompaniesShown(data) { return App.empCompany ? data.empresas.filter((e) => e === App.empCompany) : data.empresas; }
-/* byStatus no escopo do filtro por empresa (p/ KPIs) */
+/* byStatus DISTINTO no escopo do filtro por empresa (p/ KPIs e tags) */
 function empScopedByStatus(data) {
-  if (!App.empCompany) return data.byStatus;
-  const m = new Map();
-  data.areas.forEach((area) => { const c = data.matrix.get(App.empCompany)?.get(area); if (c) c.status.forEach((q, st) => m.set(st, (m.get(st) || 0) + q)); });
-  return m;
+  return App.empCompany ? (data.byCompanyStatus.get(App.empCompany) || new Map()) : data.byStatus;
 }
 /* barra de tags de empresa (seleção única, contagem sutil) */
 function empCompanyFilter(host, data) {
   if (!host) return;
   clear(host);
-  const totByEmp = new Map();
-  data.empresas.forEach((emp) => { let t = 0; data.areas.forEach((area) => { const c = data.matrix.get(emp)?.get(area); if (c) t += c.total; }); totByEmp.set(emp, t); });
+  const totByEmp = new Map();   // itens DISTINTOS por empresa (não expande por processo)
+  data.empresas.forEach((emp) => { let t = 0; (data.byCompanyStatus.get(emp) || new Map()).forEach((q) => t += q); totByEmp.set(emp, t); });
   let grand = 0; totByEmp.forEach((v) => grand += v);
   const tag = (key, label, n) => {
     const on = (App.empCompany || "__all__") === key;
@@ -1349,28 +1358,22 @@ function empMatrix(table, data) {
   clear(table);
   // thead
   const trh = h("tr", {}, h("th", { class: "corner rh" }, "Empresa"));
-  data.areas.forEach((a) => trh.appendChild(h("th", { title: a }, a)));
+  data.areas.forEach((a) => trh.appendChild(h("th", { title: a }, h("span", { class: "emp-th-lbl" }, a))));
   trh.appendChild(h("th", { class: "col-tot" }, "Total"));
   table.appendChild(h("thead", {}, trh));
   // tbody + acumuladores p/ a linha de total
   const tb = h("tbody", {});
-  const colTot = new Map(), colComp = new Map();    // area -> total / Map(status->qtd)
-  let grandTot = 0; const grandComp = new Map();
+  const colTot = new Map(), colComp = new Map();    // area -> total / Map(status->qtd) — POR PROCESSO (expande)
+  let grandTot = 0; const grandComp = new Map();    // total geral = itens DISTINTOS
   shown.forEach((emp) => {
     const tr = h("tr", {}, h("th", { class: "rh" }, emp));
-    let rowTot = 0; const rowComp = new Map();
     data.areas.forEach((area) => {
       const c = data.matrix.get(emp)?.get(area);
       const v = !c ? 0 : (sel === "all" ? c.total : (c.status.get(sel) || 0));
       if (c) {
-        rowTot += c.total;
         colTot.set(area, (colTot.get(area) || 0) + c.total);
         if (!colComp.has(area)) colComp.set(area, new Map());
-        c.status.forEach((q, st) => {
-          rowComp.set(st, (rowComp.get(st) || 0) + q);
-          colComp.get(area).set(st, (colComp.get(area).get(st) || 0) + q);
-          grandComp.set(st, (grandComp.get(st) || 0) + q);
-        });
+        c.status.forEach((q, st) => colComp.get(area).set(st, (colComp.get(area).get(st) || 0) + q));
       }
       const td = h("td", {});
       if (!c || v === 0) { td.appendChild(h("div", { class: "emp-cell empty" }, "·")); tr.appendChild(td); return; }
@@ -1387,8 +1390,12 @@ function empMatrix(table, data) {
       cellEl.addEventListener("mouseleave", empTipHide);
       td.appendChild(cellEl); tr.appendChild(td);
     });
+    // Total da LINHA = itens DISTINTOS da empresa (não a soma das células, que expande por processo)
+    const bcs = data.byCompanyStatus.get(emp) || new Map();
+    let rowTot = 0; bcs.forEach((q) => rowTot += q);
     grandTot += rowTot;
-    tr.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(rowTot)), h("span", { class: "minibar", html: compBar(rowComp, rowTot) }))));
+    bcs.forEach((q, st) => grandComp.set(st, (grandComp.get(st) || 0) + q));
+    tr.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(rowTot)), h("span", { class: "minibar", html: compBar(bcs, rowTot) }))));
     tb.appendChild(tr);
   });
   table.appendChild(tb);
@@ -1407,8 +1414,8 @@ function empBars(data) {
   const statuses = getStatusOptions();
   const isPend = (st) => { const k = statusClassFor(st) || "na"; return k === "pendente" || k === "analise" || k === "parcial"; };
   const rows = empCompaniesShown(data).map((emp) => {
-    const agg = new Map(); let tot = 0;
-    data.areas.forEach((area) => { const c = data.matrix.get(emp)?.get(area); if (!c) return; c.status.forEach((q, st) => agg.set(st, (agg.get(st) || 0) + q)); tot += c.total; });
+    const agg = data.byCompanyStatus.get(emp) || new Map();   // itens DISTINTOS por status
+    let tot = 0; agg.forEach((q) => tot += q);
     let pend = 0; agg.forEach((q, st) => { if (isPend(st)) pend += q; });
     return { emp, agg, tot, pend };
   }).filter((r) => r.tot > 0).sort((a, b) => b.pend - a.pend);
@@ -1639,7 +1646,7 @@ async function renderDashUsers(body) {
   if (!rows.length) { body.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Sem mudanças de status no período selecionado.")); return; }
 
   const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
-  const users = userIds.map((id) => { const p = App.profilesMap.get(id) || {}; return { id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, color: p.color, avatar_url: p.avatar_url }; });
+  const users = userIds.map((id) => { const p = App.profilesMap.get(id) || {}; return { id, name: titleCase(p.display_name || p.full_name || "Usuário"), full_name: p.full_name, color: p.color, avatar_url: p.avatar_url }; });
   users.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   const statuses = [...getStatusOptions()];
   for (const r of rows) { const l = normStatusLabel(r.status); if (l && !statuses.includes(l)) statuses.push(l); }
@@ -1688,7 +1695,7 @@ function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, col
   const table = h("table", { class: "umx" });
   if (orient === "su") {
     const head = h("tr", {}, h("th", { class: "rh" }, "Status"));
-    users.forEach((u) => head.appendChild(h("th", { class: "u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24))));
+    users.forEach((u) => head.appendChild(h("th", { class: "u-click u-col", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-col-nm" }, u.name))));
     head.appendChild(h("th", {}, "Total"));
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
@@ -1860,7 +1867,7 @@ function renderAppPresence() {
   clear(box);
   const online = new Map((App._appPeers || []).map((p) => [p.id, p]));
   const users = new Map();
-  for (const [id, p] of App.profilesMap) users.set(id, { id, name: p.display_name || p.full_name || "Usuário", full_name: p.full_name, email: p.email, color: p.color, avatar_url: p.avatar_url });
+  for (const [id, p] of App.profilesMap) users.set(id, { id, name: titleCase(p.display_name || p.full_name || "Usuário"), full_name: p.full_name, email: p.email, color: p.color, avatar_url: p.avatar_url });
   for (const [id, p] of online) if (!users.has(id)) users.set(id, { id, name: p.name, full_name: p.full_name, email: p.email, color: p.color });
   const all = [...users.values()].map((u) => { const on = online.get(u.id); return { ...u, online: !!on, loc: on ? on.loc : null }; });
   // SO os online viram avatar no topbar (com bolinha verde); offline vira só um contador cinza.
@@ -3000,6 +3007,7 @@ async function computeEmpresaAreaData() {
     empresas: [...empresas].sort((a, b) => a.localeCompare(b, "pt")),
     areas: [...areas].sort(byArea),
     matrix, byStatus: parsed.byStatus, total: parsed.total,
+    byCompanyStatus: parsed.byCompanyStatus,   // empresa -> Map(status->qtd) DISTINTO (cada item 1x)
     bySheetStatus, cellIndex,
   };
 }

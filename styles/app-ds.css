@@ -465,3 +465,27 @@ table.umx th.u-click:hover{ background:var(--hover); }
 .lm-alias-add:focus{ border-color:var(--blue); border-style:solid; }
 .lm-detect-row{ display:flex; align-items:center; gap:8px; padding:5px 0; }
 .lm-detect-row .lm-detect-sel{ margin-left:auto; }
+
+/* =====================================================================
+   Matriz Empresa×Processo — coluna Total congelada + cabeçalho em 2 linhas.
+   ===================================================================== */
+/* cabeçalho de processo em no máximo 2 linhas (o resto vai pro tooltip do th) */
+.dash-emp .emp-mx thead th .emp-th-lbl{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+/* congelar também a coluna Total (sticky à direita), como a coluna Empresa à esquerda */
+.dash-emp .emp-mx th.col-tot, .dash-emp .emp-mx td.tot{ position:sticky; right:0; background:var(--card-bg); z-index:1; box-shadow:-1px 0 0 var(--divider); }
+.dash-emp .emp-mx thead th.col-tot{ z-index:3; }
+.dash-emp .emp-mx thead th.corner{ z-index:4; }   /* canto sup-esquerdo acima de tudo */
+
+/* =====================================================================
+   Atalho do menu global em telas pequenas + nome do usuário na matriz.
+   ===================================================================== */
+/* ≤760px o rail global vira off-canvas (modelo); o burger no topbar o reabre */
+.topbar-burger{ display:none; flex:none; border:0; background:transparent; color:var(--text-muted); cursor:pointer; width:34px; height:34px; border-radius:8px; align-items:center; justify-content:center; }
+.topbar-burger:hover{ background:var(--hover); color:var(--text); }
+.topbar-burger svg{ width:20px; height:20px; }
+@media (max-width:760px){ .topbar-burger{ display:inline-flex; } }
+
+/* matriz de Usuários: nome no cabeçalho da coluna, com elipse no limite da largura */
+table.umx th.u-col{ vertical-align:bottom; }
+table.umx th.u-col .av{ margin:0 auto 4px; }
+table.umx th.u-col .u-col-nm{ display:block; max-width:78px; margin:0 auto; font-size:10.5px; font-weight:400; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
