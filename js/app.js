@@ -47,8 +47,14 @@ async function boot() {
     if (event === "SIGNED_IN" && !App.profile) applyRoute();
     if (event === "SIGNED_OUT") {
       clearInterval(App._beatIv); clearInterval(App._pollIv); App._presenceStarted = false;
+      stopIdleGuard(); App._idleStarted = false;
       rt.unsubscribeOnline(); store.clearOnline().catch(() => {});
-      App.project = null; App.profile = null; showAuth("login");
+      App.project = null; App.profile = null;
+      // Ao SAIR, descarta a rota antiga para o proximo login comecar pela selecao
+      // de modulo (home). F5/reabrir com sessao ativa NAO passa por aqui, entao
+      // continua retomando a ultima tela.
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
+      showAuth("login");
     }
   });
 
@@ -94,6 +100,7 @@ async function ensureProfile() {
   await reloadCompanies();
   await reloadAreas();
   if (!App._presenceStarted) { App._presenceStarted = true; startPresence(); }
+  if (!App._idleStarted) { App._idleStarted = true; startIdleGuard(); }
   return true;
 }
 
@@ -128,6 +135,64 @@ function startPresence() {
 function setLoc(loc) { App._loc = loc; heartbeatNow().then(refreshOnline); }
 /* ao mudar de célula, avisa os outros logo (sem esperar o heartbeat de 20s) */
 const scheduleCellBeat = debounce(() => { heartbeatNow(); }, 1200);
+
+/* ===================== TIMEOUT DE INATIVIDADE =====================
+   Sem atividade (mouse/teclado/scroll/toque) por IDLE_LIMIT, o usuario e
+   deslogado. Nos ultimos IDLE_WARN, um modal avisa com contagem regressiva e
+   exige clique em "Continuar conectado" para permanecer. Um relogio de 1s
+   recalcula a inatividade a partir do ultimo evento (robusto a sleep do PC). */
+const IDLE_LIMIT_MS = 30 * 60 * 1000;   // 30 min de inatividade -> logout
+const IDLE_WARN_MS  = 2  * 60 * 1000;   // aviso (com cronometro) nos ultimos 2 min
+const IDLE_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
+
+function idleBump() { if (!App._idleWarnOpen) App._idleLast = Date.now(); }
+function idleFmt(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+function startIdleGuard() {
+  App._idleLast = Date.now();
+  IDLE_EVENTS.forEach((ev) => document.addEventListener(ev, idleBump, { passive: true }));
+  clearInterval(App._idleIv);
+  App._idleIv = setInterval(idleTick, 1000);
+}
+function stopIdleGuard() {
+  clearInterval(App._idleIv); App._idleIv = null;
+  IDLE_EVENTS.forEach((ev) => document.removeEventListener(ev, idleBump, { passive: true }));
+  closeIdleWarn();
+}
+function idleTick() {
+  if (!App.profile) return;                       // so vale quando logado
+  const idle = Date.now() - (App._idleLast || Date.now());
+  if (idle >= IDLE_LIMIT_MS) { closeIdleWarn(); supabase.auth.signOut(); return; }
+  if (idle >= IDLE_LIMIT_MS - IDLE_WARN_MS) openIdleWarn(IDLE_LIMIT_MS - idle);
+  else if (App._idleWarnOpen) closeIdleWarn();
+}
+function idleStay() { App._idleLast = Date.now(); closeIdleWarn(); }
+function openIdleWarn(remainingMs) {
+  if (!App._idleWarnOpen) {
+    App._idleWarnOpen = true;
+    const scrim = h("div", { class: "scrim", id: "idle-warn" },
+      h("div", { class: "modal", style: { maxWidth: "440px", textAlign: "center" } },
+        h("h3", {}, "Sua sessão vai expirar"),
+        h("p", { class: "muted", style: { margin: "6px 0 4px" } },
+          "Por inatividade, você será desconectado em ",
+          h("strong", { id: "idle-count" }, idleFmt(remainingMs)), "."),
+        h("p", { class: "muted", style: { fontSize: "13px", marginTop: "0" } },
+          "Clique em “Continuar conectado” para permanecer."),
+        h("div", { class: "modal-foot" },
+          h("button", { class: "btn btn-ghost", onClick: () => supabase.auth.signOut() }, "Sair agora"),
+          h("button", { class: "btn btn-primary", onClick: idleStay }, "Continuar conectado"))));
+    document.body.appendChild(scrim);
+  }
+  const c = document.getElementById("idle-count");
+  if (c) c.textContent = idleFmt(remainingMs);
+}
+function closeIdleWarn() {
+  App._idleWarnOpen = false;
+  const el = document.getElementById("idle-warn");
+  if (el) el.remove();
+}
 
 function userChipEl() {
   return h("div", { class: "user-chip", onClick: openUserMenu },
