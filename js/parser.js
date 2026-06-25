@@ -11,11 +11,13 @@
 
 const norm = (v) => String(v ?? "").trim();
 const low = (v) => norm(v).toLowerCase();
+/* chave de comparação de EMPRESA: minúsculas + trim + colapsa espaços (mantém acento) */
+const key = (v) => low(v).replace(/\s+/g, " ");
 
 /* parseSheet(sheet, cells, companySet, statusSet)
    companySet/statusSet: Set de rotulos em minusculas.
    retorna { orientation:'matrix'|'list'|'none', companies:[], records:[{empresa,num,desc,status,row,col}], ... } */
-export function parseSheet(sheet, cells, companySet, statusSet) {
+export function parseSheet(sheet, cells, companyResolve, statusSet) {
   const map = new Map();
   let maxRow = 0, maxCol = 0;
   for (const c of cells) {
@@ -26,7 +28,8 @@ export function parseSheet(sheet, cells, companySet, statusSet) {
   if (!cells.length) return { orientation: "none", companies: [], records: [] };
   const val = (r, c) => { const x = map.get(r + ":" + c); return x ? norm(x.value) : ""; };
   const isStatusType = (r, c) => { const x = map.get(r + ":" + c); return !!(x && x.data_type === "status"); };
-  const isCompany = (s) => companySet.has(low(s));
+  const isCompany = (s) => companyResolve.has(key(s));
+  const canon = (s) => companyResolve.get(key(s));
   const isStatusVal = (s) => statusSet.has(low(s));
 
   // ---- candidato MATRIZ: linha com >=2 empresas (cabecalho) ----
@@ -49,7 +52,7 @@ export function parseSheet(sheet, cells, companySet, statusSet) {
   // MATRIZ vence se tiver pelo menos tantas empresas no cabecalho quanto a coluna
   if (compCols.length >= 2 && compCols.length >= compColN) {
     const firstCompCol = Math.min(...compCols);
-    const colCompany = new Map(compCols.map((c) => [c, val(headerRow, c)]));
+    const colCompany = new Map(compCols.map((c) => [c, canon(val(headerRow, c))]));
     for (let r = headerRow + 1; r <= maxRow; r++) {
       let num = "", desc = "";
       for (let c = 1; c < firstCompCol; c++) {
@@ -63,7 +66,7 @@ export function parseSheet(sheet, cells, companySet, statusSet) {
         if (isStatusVal(s)) records.push({ empresa: colCompany.get(c), num, desc, status: s, row: r, col: c });
       }
     }
-    return { orientation: "matrix", companies: [...new Set(compCols.map((c) => val(headerRow, c)))], records, headerRow };
+    return { orientation: "matrix", companies: [...new Set(compCols.map((c) => canon(val(headerRow, c))))], records, headerRow };
   }
 
   // LISTA
@@ -84,8 +87,9 @@ export function parseSheet(sheet, cells, companySet, statusSet) {
     }
     const comps = new Set();
     for (let r = 1; r <= maxRow; r++) {
-      const emp = val(r, compCol);
-      if (!isCompany(emp)) continue;
+      const raw = val(r, compCol);
+      if (!isCompany(raw)) continue;
+      const emp = canon(raw);
       comps.add(emp);
       const s = statusCol ? val(r, statusCol) : "";
       if (!isStatusVal(s)) continue;
@@ -100,7 +104,13 @@ export function parseSheet(sheet, cells, companySet, statusSet) {
 /* roda o parser em varias abas. loadCells(sheetId) -> Promise<cells[]>.
    onProgress(done,total,sheet,res) opcional. Retorna por aba + agregados. */
 export async function parseAbas(sheets, loadCells, companies, statusOptions, onProgress) {
-  const companySet = new Set((companies || []).map((x) => low(typeof x === "string" ? x : x.label)));
+  const companyResolve = new Map();   // chave(grafia) -> nome canônico (canônicos + aliases)
+  (companies || []).forEach((x) => {
+    const label = typeof x === "string" ? x : x.label;
+    if (!label) return;
+    companyResolve.set(key(label), label);
+    ((x && Array.isArray(x.aliases)) ? x.aliases : []).forEach((a) => { if (a) companyResolve.set(key(a), label); });
+  });
   const statusSet = new Set((statusOptions || []).map((x) => low(typeof x === "string" ? x : x.label)));
   const perSheet = [];
   const byCompanyStatus = new Map();   // empresa -> Map(status -> qtd)
@@ -111,7 +121,7 @@ export async function parseAbas(sheets, loadCells, companies, statusOptions, onP
   for (const s of list) {
     let cells = [];
     try { cells = await loadCells(s.id); } catch (_) {}
-    const res = parseSheet(s, cells, companySet, statusSet);
+    const res = parseSheet(s, cells, companyResolve, statusSet);
     perSheet.push({ sheet: s, res });
     for (const rec of res.records) {
       total++;

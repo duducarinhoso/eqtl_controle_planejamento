@@ -15,6 +15,9 @@ seed_data.json
 .env
 .env.*
 config.local.js
+# Credenciais de contas de teste/QA (e-mail+senha) — NUNCA versionar (repo e publico)
+credenciais.local.md
+*.local.md
 # Report Gerencial: info interna de negocio (engagement/volumetria EY) — manter LOCAL, fora do repo publico
 _Report Gerencial/
 **/_Report Gerencial/

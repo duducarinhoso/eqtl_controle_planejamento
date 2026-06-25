@@ -376,6 +376,31 @@ export async function loadStatusAggregate(project) {
   return out;
 }
 
+/* mudanças de status (cell_history) das abas do projeto — p/ cruzar com as
+   células válidas do parseAbas (medidor de Usuários e drill por usuário).
+   sheetIds: array de ids; opts.userId / opts.since opcionais. */
+export async function loadStatusChanges(sheetIds, opts = {}) {
+  if (!sheetIds || !sheetIds.length) return [];
+  const { userId = null, since = null } = opts;
+  const out = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    let q = supabase.from("cell_history")
+      .select("sheet_id,row,col,new_value,changed_by,changed_at")
+      .in("sheet_id", sheetIds)
+      .order("changed_at", { ascending: false })
+      .range(from, from + page - 1);
+    if (userId) q = q.eq("changed_by", userId);
+    if (since) q = q.gte("changed_at", new Date(since).toISOString());
+    const { data, error } = await q;
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < page) break;
+    if (from > 60000) break;   // backstop de segurança
+  }
+  return out;
+}
+
 /* ===================== HISTORICO ===================== */
 export async function loadSheetHistory(sheetId, limit = 100) {
   const { data, error } = await supabase.from("cell_history")

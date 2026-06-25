@@ -87,3 +87,381 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 .ctx-menu button.danger{ color:var(--red); }
 .toast{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
 .toast.err{ background:var(--red); color:#fff; border-color:transparent; }
+
+/* =====================================================================
+   TELA DO PROJETO no shell DS v2 (I-0010). O projeto vive dentro de
+   #mod-content como um two-pane: rail de contexto + área de trabalho.
+   Trava a altura (scroll interno) só no modo projeto; os hubs seguem
+   com page-scroll normal.
+   ===================================================================== */
+.app.in-project{ height:100vh; overflow:hidden; }
+.app.in-project .topbar, .app.in-project .page-row{ display:none; }  /* a faixa do projeto os substitui */
+.app.in-project .main{ min-height:0; }
+#mod-content.proj-mode{ flex:1; min-height:0; padding:0; gap:0; display:block; overflow:hidden; }
+
+.proj-shell{ display:flex; height:100%; min-height:0; }
+.proj-rail{
+  width:240px; flex:none; min-height:0; display:flex; flex-direction:column;
+  background:var(--card-bg); border-right:1px solid var(--border); overflow:hidden;
+}
+.proj-main{ flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); }
+
+/* header do rail: voltar + nome do projeto */
+.proj-rail .pr-head{ display:flex; align-items:center; gap:8px; height:52px; flex:none;
+  padding:0 12px; border-bottom:1px solid var(--border); }
+.proj-rail .pr-back{ border:0; background:transparent; color:var(--text-muted); cursor:pointer;
+  display:grid; place-items:center; width:28px; height:28px; border-radius:6px; flex:none; }
+.proj-rail .pr-back:hover{ background:var(--hover); color:var(--text); }
+.proj-rail .pr-back svg{ width:18px; height:18px; }
+.proj-rail .pr-name{ font-weight:500; font-size:13px; color:var(--text);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* nav contextual (reusa a linguagem do .menu do modelo) */
+.proj-nav{ padding:8px 8px 4px; display:flex; flex-direction:column; gap:2px; flex:none; }
+.proj-nav .pn-item{ display:flex; align-items:center; gap:10px; height:36px; padding:0 10px;
+  border:0; background:transparent; border-radius:6px; color:var(--text-muted);
+  font-family:var(--font); font-size:13px; text-align:left; cursor:pointer; width:100%; }
+.proj-nav .pn-item svg{ width:17px; height:17px; flex:none; }
+.proj-nav .pn-item:hover{ background:var(--hover); color:var(--text); }
+.proj-nav .pn-item.active{ background:color-mix(in srgb, var(--blue) 12%, transparent);
+  color:var(--text); font-weight:500; box-shadow:inset 2px 0 0 var(--blue); }
+.proj-nav .pn-item.active svg{ color:var(--blue); }
+
+/* seção "Abas": rótulo + busca + lista rolável (ocupa o resto do rail) */
+.proj-abas{ display:flex; flex-direction:column; min-height:0; flex:1; border-top:1px solid var(--divider); margin-top:6px; }
+.proj-abas .pa-top{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px 4px; flex:none; }
+.proj-abas .pa-lab{ font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); }
+.proj-abas .pa-add{ border:0; background:transparent; color:var(--text-muted); font-size:18px; line-height:1; cursor:pointer; width:22px; height:22px; border-radius:5px; }
+.proj-abas .pa-add:hover{ background:var(--hover); color:var(--text); }
+.proj-abas .side-search{ margin:0 10px 6px; height:30px; padding:0 10px; flex:none;
+  background:var(--input-bg); border:1px solid var(--input-border); border-radius:6px;
+  color:var(--text); font-family:var(--font); font-size:12px; outline:none; }
+.proj-abas .side-search:focus{ border-color:var(--blue); }
+.proj-abas #sheet-list{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 6px 8px; }
+
+/* item de aba (reaproveita #sheet-list de renderSidebar) */
+.proj-rail .sheet-item{ display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:6px; cursor:pointer; color:var(--text-muted); }
+.proj-rail .sheet-item:hover{ background:var(--hover); color:var(--text); }
+.proj-rail .sheet-item.active{ background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--text); }
+.proj-rail .sheet-item .col{ display:flex; flex-direction:column; min-width:0; flex:1; }
+.proj-rail .sheet-item .nm{ font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.proj-rail .sheet-item .sub-name{ font-size:10.5px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.proj-rail .sheet-item .badge{ font-size:9.5px; padding:1px 6px; background:var(--hover); color:var(--text-muted); border-radius:999px; }
+.proj-rail .sheet-item .row-menu{ border:0; background:transparent; color:var(--text-dim); cursor:pointer; opacity:0; }
+.proj-rail .sheet-item:hover .row-menu{ opacity:1; }
+.proj-rail .sheet-empty{ padding:14px 12px; font-size:12px; color:var(--text-dim); }
+
+/* rodapé do rail: Importar / Exportar / Configuração */
+.proj-foot{ flex:none; border-top:1px solid var(--border); padding:8px; display:flex; flex-direction:column; gap:2px; }
+.proj-foot .pf-btn{ display:flex; align-items:center; gap:9px; height:32px; padding:0 10px; border:0; background:transparent;
+  border-radius:6px; color:var(--text-muted); font-family:var(--font); font-size:12.5px; text-align:left; cursor:pointer; width:100%; }
+.proj-foot .pf-btn svg{ width:16px; height:16px; flex:none; }
+.proj-foot .pf-btn:hover{ background:var(--hover); color:var(--text); }
+.proj-foot .exp-bar{ margin-top:4px; }
+
+/* faixa-topo da área de trabalho: breadcrumb dinâmico + presença */
+.proj-head{ display:flex; align-items:center; gap:12px; height:52px; flex:none;
+  padding:0 18px; border-bottom:1px solid var(--border); }
+.proj-head .crumb{ font-size:14px; font-weight:500; color:var(--text); }
+.proj-head .crumb .crumb-name{ color:var(--text); }
+.proj-head .presence{ margin-left:auto; display:flex; align-items:center; }
+
+/* área que troca de conteúdo (dashboard / solicitações / grade) */
+.proj-main #grid-scroll{ flex:1; min-height:0; overflow:auto; }
+.proj-main .toolbar{ flex:none; }
+.proj-main .statusbar{ flex:none; }
+/* toolbar/statusbar só na grade: em dashboard/solic o #grid-scroll ganha .dash/.solic */
+.proj-main #grid-scroll.dash ~ .statusbar,
+.proj-main #grid-scroll.solic ~ .statusbar{ display:none; }
+
+@media (prefers-reduced-motion: reduce){ .proj-nav .pn-item, .proj-rail .sheet-item{ transition:none; } }
+
+/* ===== Re-skin do Dashboard do projeto (DS v2) — sem inventar gráficos ===== */
+.proj-main .dash{ padding:0; }   /* densidade: o padding fica em .dash-tabs/.dash-body (evita padding duplo) */
+.dash-tabs{ display:flex; gap:6px; margin-bottom:16px; }
+.dash-tabs .dtab{ height:32px; padding:0 14px; border:1px solid var(--border); background:var(--card-bg);
+  border-radius:999px; color:var(--text-muted); font-family:var(--font); font-size:12.5px; cursor:pointer; }
+.dash-tabs .dtab.on{ background:var(--blue); border-color:transparent; color:#fff; font-weight:500; }
+.dash-body .sub{ color:var(--text-muted); font-size:12.5px; margin:0 0 14px; }
+
+/* KPIs como cards .stat do modelo (faixa responsiva) */
+.kpi-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--gap); }
+.kpi-card{ background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:16px 18px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.kpi-card .kpi-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.kpi-card .chip{ align-self:flex-start; }
+.kpi-card .val{ font-size:23px; font-weight:700; color:var(--text); line-height:1; }
+.kpi-card .lbl{ font-size:12px; color:var(--text-muted); }
+.kpi-sheets{ display:flex; flex-direction:column; gap:2px; margin-top:8px; overflow:auto; }
+.kpi-sheets .srow{ display:flex; justify-content:space-between; gap:8px; padding:4px 6px; border-radius:5px;
+  font-size:12px; color:var(--text-muted); cursor:pointer; }
+.kpi-sheets .srow:hover{ background:var(--hover); color:var(--text); }
+.kpi-sheets .srow .cnt{ font-variant-numeric:tabular-nums; color:var(--text-dim); }
+
+/* chips de status (recebido/pendente/analise/parcial/na) */
+.dash .chip, .u-card .chip{ display:inline-flex; align-items:center; border-radius:999px; padding:2px 10px;
+  font-size:11px; font-weight:600; }
+.chip.recebido{ background:#2f7d4e; color:#fff; }
+.chip.pendente{ background:#8a6914; color:#fff; }
+.chip.analise{ background:#246b78; color:#fff; }
+.chip.parcial{ background:#b85c2e; color:#fff; }
+.chip.na{ background:transparent; color:var(--text-muted); box-shadow:inset 0 0 0 1px var(--border); }
+
+/* heatmaps/matrizes como .tbl dentro de .card */
+.u-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:var(--gap); margin-bottom:var(--gap); }
+.u-kpi{ background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+.u-kpi .l{ font-size:12px; color:var(--text-muted); margin-bottom:4px; }
+.u-kpi .v{ font-size:20px; font-weight:700; color:var(--text); }
+.dash-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.dash-head h2{ font-size:16px; font-weight:500; color:var(--text); }
+.dash-ctrls{ display:flex; gap:8px; flex-wrap:wrap; }
+.seg{ display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.seg .seg-b{ border:0; background:var(--card-bg); color:var(--text-muted); font-size:12px; padding:6px 12px; cursor:pointer; }
+.seg .seg-b.on{ background:var(--blue); color:#fff; }
+.u-card{ background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:var(--gap); overflow:hidden; }
+.u-card-h{ display:flex; align-items:baseline; gap:10px; padding:14px 18px 0; }
+.u-card-h h3{ font-size:14px; font-weight:500; color:var(--text); }
+.u-card-h .sub{ font-size:11.5px; color:var(--text-dim); }
+.u-tablewrap{ overflow:auto; padding:12px 18px 18px; }
+table.umx{ width:100%; border-collapse:collapse; font-size:12px; }
+table.umx th{ position:sticky; top:0; background:var(--card-bg); color:var(--table-head); font-weight:500;
+  text-align:center; padding:6px 8px; border-bottom:1px solid var(--divider); white-space:nowrap; }
+table.umx th.rh, table.umx td.rh{ text-align:left; }
+table.umx td{ padding:3px 6px; border-bottom:1px solid var(--divider); color:var(--text-muted); text-align:center; }
+table.umx td.tot, table.umx tfoot td{ font-weight:600; color:var(--text); font-variant-numeric:tabular-nums; }
+table.umx .hcell{ min-width:34px; border-radius:4px; padding:4px 6px; font-variant-numeric:tabular-nums; }
+.u-nm{ color:var(--text); }
+
+/* ===== Encaixe da tela Solicitações e da grade na área de trabalho ===== */
+/* a tela Solicitações ocupa toda a área e rola por dentro da própria tabela */
+.proj-main #grid-scroll.solic{ padding:0; overflow:hidden; display:flex; }
+.proj-main #grid-scroll.solic .solic-host{ flex:1; min-width:0; min-height:0; display:flex; }
+.proj-main #grid-scroll.solic .gp-root.grade-view{ flex:1; min-width:0; }
+
+/* ===== Dashboard "Entregas por empresa" (portado de mockups/dashboard_entregas_empresa.html) ===== */
+.dash-emp{padding:18px 22px 40px}
+.dash-emp .emp-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--gap);margin-bottom:var(--gap)}
+@media (max-width:1080px){.dash-emp .emp-kpis{grid-template-columns:repeat(2,1fr)}}
+.dash-emp .stat .ico.c-total{background:var(--blue)}
+.dash-emp .stat .ico.c-ok{background:var(--st-recebido)}
+.dash-emp .stat .ico.c-pend{background:var(--st-pendente);color:#3a1f02}
+.dash-emp .stat .ico.c-emp{background:var(--purple)}
+.dash-emp .stat .ico.c-proc{background:var(--cyan)}
+.dash-emp .s-value small{font-size:12.5px;font-weight:500;color:var(--text-dim);margin-left:2px}
+
+.dash-emp .emp-main{display:grid;grid-template-columns:1.62fr 1fr;gap:var(--gap);align-items:start}
+.dash-emp .emp-rail{display:flex;flex-direction:column;gap:var(--gap)}
+@media (max-width:1080px){.dash-emp .emp-main{grid-template-columns:1fr}}
+.dash-emp .card-head .hint{font-size:11.5px;color:var(--text-dim)}
+.dash-emp .emp-note{margin-top:12px;font-size:11.5px;color:var(--text-dim);line-height:1.6}
+
+/* filtros */
+.dash-emp .emp-filters{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:6px}
+.dash-emp .fchip{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:999px;padding:5px 11px 5px 9px;font:500 12px var(--font);display:inline-flex;align-items:center;gap:7px;transition:all .14s ease}
+.dash-emp .fchip .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--blue)}
+.dash-emp .fchip .dot.recebido{background:var(--st-recebido)}
+.dash-emp .fchip .dot.pendente{background:var(--st-pendente)}
+.dash-emp .fchip .dot.analise{background:var(--st-analise)}
+.dash-emp .fchip .dot.parcial{background:var(--st-parcial)}
+.dash-emp .fchip .dot.na{background:var(--st-na)}
+.dash-emp .fchip .lb{color:var(--text)}
+.dash-emp .fchip .n{color:var(--text-dim);font-variant-numeric:tabular-nums}
+.dash-emp .fchip:hover{border-color:var(--text-dim);color:var(--text)}
+.dash-emp .fchip.on{border-color:transparent;background:var(--hover);box-shadow:inset 0 0 0 1.5px var(--blue)}
+
+/* matriz */
+.dash-emp .emp-mx-scroll{overflow-x:auto;margin-top:4px}
+.dash-emp table.emp-mx{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+.dash-emp .emp-mx th,.dash-emp .emp-mx td{padding:0}
+.dash-emp .emp-mx thead th{position:sticky;top:0;background:var(--card-bg);z-index:2;font-size:11px;font-weight:500;color:var(--text-dim);text-align:center;padding:0 4px 9px;vertical-align:bottom;line-height:1.25;min-width:46px}
+.dash-emp .emp-mx thead th.corner{text-align:left}
+.dash-emp .emp-mx th.col-tot,.dash-emp .emp-mx td.tot{border-left:1px solid var(--divider)}
+.dash-emp .emp-mx th.rh{position:sticky;left:0;z-index:1;background:var(--card-bg);text-align:left;font-size:12.5px;font-weight:500;color:var(--text);padding:0 14px 0 2px;white-space:nowrap;vertical-align:middle}
+.dash-emp .emp-mx tbody tr{height:40px}
+.dash-emp .emp-mx tbody tr:hover .rh{color:var(--blue)}
+.dash-emp .emp-cell{position:relative;height:34px;margin:2px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;user-select:none;background:var(--input-bg);color:var(--text-dim);transition:transform .12s ease,box-shadow .12s ease;outline:none}
+.dash-emp .emp-cell.empty{cursor:default;opacity:.5;font-weight:400}
+.dash-emp .emp-cell.has:hover{transform:translateY(-1px);box-shadow:0 0 0 2px var(--card-bg),0 0 0 3.5px var(--blue)}
+.dash-emp .emp-cell.has:focus-visible{box-shadow:0 0 0 2px var(--card-bg),0 0 0 3.5px var(--blue)}
+.dash-emp .emp-cell .comp{position:absolute;left:5px;right:5px;bottom:3px;height:3px;border-radius:2px;display:flex;overflow:hidden;opacity:.92}
+.dash-emp .emp-cell .comp i{height:100%}
+.dash-emp .emp-cell.tot-cell{background:transparent;cursor:default;flex-direction:column;gap:3px;font-weight:700;color:var(--text)}
+.dash-emp .minibar{width:54px;height:5px;border-radius:3px;display:flex;overflow:hidden;background:var(--divider)}
+.dash-emp .minibar i{height:100%}
+
+/* barras */
+.dash-emp .emp-bars{display:flex;flex-direction:column;gap:11px}
+.dash-emp .bar-row{cursor:pointer}
+.dash-emp .bar-row .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.dash-emp .bar-row .nm{font-size:12.5px;color:var(--text)}
+.dash-emp .bar-row .tt{font-size:11.5px;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.dash-emp .bar-row .tt b{color:var(--st-pendente);font-weight:700}
+.dash-emp .track{height:14px;border-radius:4px;display:flex;overflow:hidden;background:var(--divider)}
+.dash-emp .track i{height:100%;transition:filter .14s ease}
+.dash-emp .bar-row:hover .track i{filter:brightness(1.08)}
+
+/* donut */
+.dash-emp .emp-dist{display:flex;align-items:center;gap:18px}
+.dash-emp .dn-num{font-size:24px;font-weight:700;fill:var(--text)}
+.dash-emp .dn-lab{font-size:10.5px;fill:var(--text-dim)}
+.dash-emp .dleg{display:flex;flex-direction:column;gap:9px;flex:1}
+.dash-emp .dleg .row{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.dash-emp .dleg .row .sw{width:11px;height:11px;border-radius:3px;flex:none}
+.dash-emp .dleg .row .lb{color:var(--text-muted);flex:1}
+.dash-emp .dleg .row .vl{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.dash-emp .dleg .row .pc{color:var(--text-dim);font-size:11px;width:38px;text-align:right}
+
+/* estado vazio */
+.dash-emp .emp-empty{padding:48px 28px;text-align:center;color:var(--text-muted)}
+.dash-emp .emp-empty h3{color:var(--text);font-weight:500;margin-bottom:8px}
+.dash-emp .emp-empty p{max-width:520px;margin:0 auto;font-size:13px;line-height:1.6}
+
+/* tooltip (global, vive no body) */
+#emp-tip{position:fixed;z-index:60;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s ease,transform .12s ease;background:var(--card-bg);border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px 12px;min-width:178px;font-size:12px}
+#emp-tip.show{opacity:1;transform:translateY(0)}
+#emp-tip .tt-h{font-weight:600;color:var(--text);margin-bottom:7px;font-size:12.5px}
+#emp-tip .tt-r{display:flex;align-items:center;gap:8px;color:var(--text-muted);margin:3px 0}
+#emp-tip .tt-r .sw{width:9px;height:9px;border-radius:50%;flex:none}
+#emp-tip .tt-r .v{margin-left:auto;color:var(--text);font-weight:600}
+#emp-tip .tt-f{margin-top:8px;padding-top:7px;border-top:1px solid var(--divider);color:var(--blue);font-size:11px;font-weight:500}
+
+/* =====================================================================
+   REANÁLISE 2026-06-25 — nova tab "Entregas por empresa" + densidade do
+   dashboard + correções de legibilidade/dark.
+   (a) densidade: menos espaço, mais área de dados;
+   (b) dark: tokens legados FIXOS claros (--workspace-bg/--surface-*) que
+       vazavam no tema escuro → tokens theme-aware do DS v2;
+   (c) legibilidade: micro-rótulos que carregam dado saem de --text-dim
+       (sub-AA) para --text-muted (AA em claro e escuro).
+   ===================================================================== */
+/* (b) dark-mode: superfícies do dashboard com token legado fixo claro */
+.proj-main #grid-scroll.dash{ background:var(--bg); --gap:12px; }
+.proj-main .dash-tabs{ background:var(--bg); border-bottom:1px solid var(--border); padding:10px 16px 0; }
+.proj-main .dash-body{ padding:6px 16px 16px; }
+.proj-main table.umx td.tot{ background:var(--hover); }
+.proj-main .kpi-sheets{ border-top:1px solid var(--divider); }
+
+/* (a) densidade do dashboard (todas as 3 sub-abas) */
+.dash-body .sub{ margin:0 0 8px; }
+.dash-head{ margin-bottom:8px; }
+.kpi-card{ padding:12px 14px; }
+.proj-main .dash .card-head{ padding:13px 16px 0; }
+.proj-main .dash .card-body{ padding:11px 16px 15px; }
+.u-card-h{ padding:12px 16px 0; }
+.u-tablewrap{ padding:10px 16px 14px; }
+.dash-emp{ padding:0; }
+.dash-emp .stat{ padding:12px 14px; }
+.dash-emp .emp-mx tbody tr{ height:34px; }
+.dash-emp .emp-cell{ height:28px; }
+
+/* (c) legibilidade: rótulos que carregam dado → --text-muted (AA claro+escuro) */
+.dash-emp .emp-mx thead th,
+.dash-emp .fchip .n,
+.dash-emp .dleg .row .pc,
+.dash-emp .bar-row .tt,
+.dash-emp .dn-lab,
+.dash-emp .s-value small,
+.dash-emp .card-head .hint,
+.dash-emp .emp-note,
+.kpi-sheets .srow .cnt,
+.u-card-h .sub{ color:var(--text-muted); }
+.dash-emp .bar-row .tt b{ color:var(--text); }   /* pend: peso, não amber sub-AA no claro */
+.dash-emp .emp-note{ margin-top:8px; }
+
+/* =====================================================================
+   FASE 1 (reanálise) — legibilidade do rail + botão de recolher.
+   ===================================================================== */
+/* (1.2) texto do rail estava claro demais no branco: primários→--text */
+.proj-nav .pn-item{ color:var(--text); }
+.proj-rail .sheet-item{ color:var(--text); }
+.proj-rail .sheet-item .sub-name{ color:var(--text-muted); }
+.proj-foot .pf-btn{ color:var(--text); }
+.proj-abas .pa-lab{ color:var(--text-muted); }
+/* descendentes legados do .sheet-item coloriam com --side-* (sidebar navy antigo) → ilegível no branco */
+.proj-rail .sheet-item .nm,
+.proj-rail .sheet-item.active .nm{ color:var(--text); }
+.proj-rail .sheet-item.active .sub-name{ color:var(--text-muted); }
+.proj-rail .sheet-item .idx,
+.proj-rail .sheet-item .meta-time{ color:var(--text-dim); }
+
+/* (1.3) recolher o rail do projeto (botão na faixa de trabalho) */
+.proj-head .ph-collapse{ flex:none; border:0; background:transparent; color:var(--text-muted);
+  cursor:pointer; width:30px; height:30px; border-radius:6px; display:grid; place-items:center; }
+.proj-head .ph-collapse:hover{ background:var(--hover); color:var(--text); }
+.proj-head .ph-collapse svg{ width:18px; height:18px; }
+.proj-shell.rail-collapsed .proj-rail{ display:none; }
+
+/* =====================================================================
+   FASE 3 — tab Empresas: filtro por empresa, largura de coluna, total.
+   ===================================================================== */
+/* (3.4) barra de filtro por empresa (abaixo dos KPIs, acima da matriz/barras) */
+.dash-emp .emp-companies{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+.dash-emp .cchip{ cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text);
+  border-radius:999px; padding:4px 11px; font:500 12px var(--font); display:inline-flex; align-items:center; gap:7px; transition:border-color .14s,background .14s; }
+.dash-emp .cchip .n{ color:var(--text-dim); font-size:11px; font-variant-numeric:tabular-nums; }   /* contagem sutil */
+.dash-emp .cchip:hover{ border-color:var(--text-dim); }
+.dash-emp .cchip.on{ border-color:transparent; background:var(--hover); box-shadow:inset 0 0 0 1.5px var(--blue); }
+
+/* (3.2) larguras de coluna padronizadas */
+.dash-emp table.emp-mx{ table-layout:fixed; }
+.dash-emp .emp-mx th.rh, .dash-emp .emp-mx td:first-child{ width:168px; }
+.dash-emp .emp-mx thead th:not(.rh):not(.col-tot){ width:86px; }
+.dash-emp .emp-mx th.col-tot, .dash-emp .emp-mx td.tot{ width:96px; }
+
+/* (3.3) linha de total no rodapé da matriz */
+.dash-emp .emp-mx tfoot th.rh{ font-weight:700; color:var(--text); }
+.dash-emp .emp-mx tfoot th, .dash-emp .emp-mx tfoot td{ border-top:1.5px solid var(--border); padding-top:2px; }
+.dash-emp .emp-mx tfoot .emp-cell{ background:transparent; cursor:default; flex-direction:column; gap:3px; font-weight:700; color:var(--text); }
+
+/* =====================================================================
+   FASE 4 — paleta de status sóbria (B), coerente em TODAS as tabs.
+   Escopada na área do dashboard (não toca a grade). Substitui os --st-*
+   vívidos legados nas bolinhas/barras/minibarras/ícones/donut da tab Empresas.
+   ===================================================================== */
+.proj-main .dash{
+  --st-recebido:#2f7d4e;   /* verde   · branco 5.0:1 */
+  --st-pendente:#8a6914;   /* âmbar   · branco 5.1:1 */
+  --st-analise:#246b78;    /* teal    · branco 6.1:1 */
+  --st-parcial:#b85c2e;    /* coral   · branco 4.8:1 */
+  --st-na:#6b7b74;         /* neutro sóbrio */
+}
+.dash-emp .stat .ico.c-pend{ color:#fff; }   /* âmbar sóbrio pede ícone branco (o #3a1f02 sumia) */
+
+/* =====================================================================
+   FASE 6 — modal de drill por usuário (tab Usuários).
+   ===================================================================== */
+table.umx th.u-click, table.umx td.rh.u-click{ cursor:pointer; }
+table.umx td.rh.u-click:hover .u-nm{ color:var(--blue); }
+table.umx th.u-click:hover{ background:var(--hover); }
+.u-drill{ display:flex; flex-direction:column; gap:10px; max-height:min(64vh,560px); overflow:auto; }
+.u-drill .sub{ color:var(--text-muted); font-size:12.5px; }
+.ud-emp{ border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.ud-emp-h{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; background:var(--hover); }
+.ud-emp-nm{ font-weight:500; color:var(--text); font-size:13px; }
+.ud-emp-n{ font-variant-numeric:tabular-nums; color:var(--text-muted); font-size:12px; }
+.ud-aba{ border-top:1px solid var(--divider); }
+.ud-aba > summary{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; cursor:pointer; list-style:none; color:var(--text); font-size:12.5px; }
+.ud-aba > summary::-webkit-details-marker{ display:none; }
+.ud-aba > summary:hover{ background:var(--hover); }
+.ud-aba > summary::before{ content:"▸"; color:var(--text-dim); margin-right:2px; font-size:11px; transition:transform .12s; display:inline-block; }
+.ud-aba[open] > summary::before{ transform:rotate(90deg); }
+.ud-aba-nm{ flex:1; }
+.ud-aba-n{ font-variant-numeric:tabular-nums; color:var(--text-dim); font-size:11.5px; }
+.ud-cells{ display:flex; flex-direction:column; gap:4px; padding:2px 12px 10px 26px; }
+.ud-cell{ display:flex; align-items:center; gap:10px; padding:3px 0; }
+.ud-cell .ud-when{ color:var(--text-muted); font-size:11.5px; margin-left:auto; }
+
+/* =====================================================================
+   De-Para de empresas (Lista de Empresas → outras grafias / aliases).
+   ===================================================================== */
+.lm-row{ display:flex; flex-direction:column; gap:6px; align-items:stretch; padding:8px 0; border-bottom:1px solid var(--divider); }
+.lm-row-top{ display:flex; align-items:center; gap:8px; }
+.lm-row-top .lm-label{ flex:1; min-width:0; }
+.lm-aliases{ display:flex; flex-wrap:wrap; gap:5px; align-items:center; padding-left:2px; }
+.lm-alias{ display:inline-flex; align-items:center; gap:5px; background:var(--hover); color:var(--text); border-radius:999px; padding:2px 6px 2px 10px; font-size:11.5px; }
+.lm-alias-x{ border:0; background:transparent; color:var(--text-dim); cursor:pointer; font-size:11px; line-height:1; padding:0; }
+.lm-alias-x:hover{ color:var(--red); }
+.lm-alias-add{ border:1px dashed var(--border); background:transparent; border-radius:999px; padding:3px 10px; font-size:11.5px; color:var(--text); font-family:var(--font); outline:none; width:130px; }
+.lm-alias-add:focus{ border-color:var(--blue); border-style:solid; }
+.lm-detect-row{ display:flex; align-items:center; gap:8px; padding:5px 0; }
+.lm-detect-row .lm-detect-sel{ margin-left:auto; }

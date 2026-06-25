@@ -554,10 +554,11 @@ function goToCell(pid, sid, r, c) {
 async function mountProject(project) {
   App.project = project;
   App.sheetFilter = "";
-  $("#auth-root").hidden = true;
-  const root = $("#app-root"); root.hidden = false;
-  clear(root);
-  root.appendChild(buildShell());
+  App.view = null;          // shell reconstruído: não deixar o guard de applyRoute pular o render do dashboard
+  const slot = mountModuleShell("ops-proj");          // rail global, Operações ativo
+  document.querySelector(".app")?.classList.add("in-project");
+  slot.classList.add("proj-mode");
+  slot.appendChild(buildProjectPane());               // rail de contexto + área de trabalho
   await refreshSheets();
 }
 
@@ -587,7 +588,7 @@ async function applyRoute() {
   }
   const pid = decodeURIComponent(m[1]);
   const sid = m[2] ? decodeURIComponent(m[2]) : null;
-  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .lg-app")) {
+  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .proj-shell")) {
     const projs = (App._projects && App._projects.length) ? App._projects : await store.listProjects();
     App._projects = projs;
     const proj = projs.find((x) => String(x.id) === pid);
@@ -717,6 +718,8 @@ function buildModuleShell(activeItem) {
 function mountModuleShell(activeItem) {
   $("#auth-root").hidden = true;
   const root = $("#app-root"); root.hidden = false;
+  document.querySelector(".app")?.classList.remove("in-project");
+  const _mc = document.getElementById("mod-content"); if (_mc) _mc.classList.remove("proj-mode");
   const cur = root.querySelector(".app");
   if (!cur || !cur.querySelector("#sidebarMenu")) {
     clear(root);
@@ -765,6 +768,93 @@ function showModulePlaceholder(itemKey) {
     "adm-cfg":   { kicker: "Administração", title: "Configurações", desc: "Ajustes gerais da aplicação." },
   };
   renderPlaceholder(slot, P[itemKey] || { kicker: "", title: "Em construção", desc: "" });
+}
+
+/* ============================ SHELL DO PROJETO (DS v2) ============================ */
+/* Ícones inline para o rail de contexto do projeto (coerentes com ITEM_IC). */
+const PROJ_IC = {
+  dash:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  solic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>',
+  back:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  imp:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+  exp:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5-5 5 5"/><path d="M12 5v12"/></svg>',
+  cfg:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+};
+
+/* Rail de contexto do projeto: nav (Dashboard/Solicitações/Busca) + Abas + rodapé.
+   Mantém os IDs que o resto do app já usa: #nav-dashboard, #nav-solic, #sheet-list, #exp-bar. */
+function buildProjectRail() {
+  const navItem = (id, icon, label, on) => {
+    const a = h("button", id ? { class: "pn-item", id, onClick: on } : { class: "pn-item", onClick: on });
+    a.innerHTML = icon + '<span>' + escapeHtml(label) + '</span>';
+    return a;
+  };
+  const nav = h("div", { class: "proj-nav" },
+    navItem("nav-dashboard", PROJ_IC.dash, "Dashboard", () => goProject(App.project.id)),
+    navItem("nav-solic", PROJ_IC.solic, "Solicitações", () => showSolicitacoes()),
+    navItem(null, PROJ_IC.search, "Busca geral", () => openGlobalSearch()));
+
+  const sheetList = h("div", { class: "sheet-list", id: "sheet-list" });
+  const abas = h("div", { class: "proj-abas" },
+    h("div", { class: "pa-top" },
+      h("span", { class: "pa-lab" }, "Abas"),
+      h("button", { class: "pa-add", title: "Nova aba", onClick: newSheet }, "+")),
+    h("input", { class: "side-search", type: "search", placeholder: "Buscar aba…", value: App.sheetFilter || "",
+      oninput: (e) => { App.sheetFilter = e.target.value; renderSidebar(); } }),
+    sheetList);
+
+  const footBtn = (icon, label, on, id) => {
+    const b = h("button", id ? { class: "pf-btn", id, onClick: on } : { class: "pf-btn", onClick: on });
+    b.innerHTML = icon + '<span>' + escapeHtml(label) + '</span>';
+    return b;
+  };
+  const foot = h("div", { class: "proj-foot" },
+    isAdmin() ? footBtn(PROJ_IC.imp, "Importar Excel", openExcelImport) : null,
+    footBtn(PROJ_IC.exp, "Exportar", enterExportMode, "btn-export"),
+    footBtn(PROJ_IC.cfg, "Configuração", openConfig),
+    h("div", { class: "exp-bar", id: "exp-bar", hidden: true }));
+
+  return h("aside", { class: "proj-rail", "aria-label": "Navegação do projeto" },
+    h("div", { class: "pr-head" },
+      h("button", { class: "pr-back", title: "Voltar para Operações", "aria-label": "Voltar para Operações",
+        onClick: goOperacoes, html: PROJ_IC.back }),
+      h("span", { class: "pr-name", title: App.project ? App.project.name : "" }, App.project ? App.project.name : "")),
+    nav, abas, foot);
+}
+
+/* Área de trabalho do projeto montada dentro de #mod-content (modo projeto). */
+function buildProjectPane() {
+  const crumb = h("div", { class: "crumb", id: "crumb" }, "—");
+  const presence = h("div", { class: "presence", id: "presence" });
+  const collapseBtn = h("button", { class: "ph-collapse", title: "Recolher/expandir o menu do projeto", "aria-label": "Recolher o menu do projeto",
+    onClick: () => document.querySelector(".proj-shell")?.classList.toggle("rail-collapsed"),
+    html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' });
+  const head = h("div", { class: "proj-head" }, collapseBtn, crumb, presence);
+
+  const toolbar = buildToolbar();
+
+  const gridScroll = h("div", { class: "grid-scroll", id: "grid-scroll", tabindex: "0" });
+  gridScroll.addEventListener("wheel", (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    setZoom(App.zoom + (e.deltaY < 0 ? 10 : -10));
+  }, { passive: false });
+
+  const statusbar = h("div", { class: "statusbar" },
+    h("span", { class: "rt", id: "rt-status" }, h("span", { class: "dot" }), h("span", {}, "Conectando…")),
+    h("span", { id: "sel-info" }, ""),
+    h("div", { class: "spacer", style: { flex: 1 } }),
+    h("span", { id: "sheet-info" }, ""),
+    h("div", { class: "zoom-ctl" },
+      h("button", { class: "zbtn", title: "Diminuir zoom", onClick: () => setZoom(App.zoom - 10) }, "−"),
+      h("input", { type: "range", id: "zoom-range", min: "50", max: "200", step: "10", value: String(App.zoom),
+        oninput: (e) => setZoom(parseInt(e.target.value, 10)) }),
+      h("button", { class: "zbtn", title: "Aumentar zoom", onClick: () => setZoom(App.zoom + 10) }, "+"),
+      h("span", { id: "zoom-label", class: "zoom-label", title: "Redefinir para 100%", onClick: () => setZoom(100) }, App.zoom + "%")));
+
+  const main = h("div", { class: "proj-main" }, head, toolbar, gridScroll, statusbar);
+  return h("div", { class: "proj-shell" }, buildProjectRail(), main);
 }
 
 function buildShell() {
@@ -949,6 +1039,7 @@ async function refreshSheets() {
   App.sheets = sortedSheets(sheets);
   App.activity = activity;
   App.sheetIndex = index || new Map();
+  App._empData = null;          // invalida o cache do cruzamento (abas mudaram)
   renderSidebar();
 }
 
@@ -1089,9 +1180,11 @@ function showEmptyState() {
 
 /* ============================ DASHBOARD ============================ */
 async function showDashboard() {
+  if (App.view !== "dashboard") App._empData = null;     // entrou no dashboard de fora (ex.: após editar células/abas) → recomputa o cruzamento; troca de tab reusa o cache
+  document.getElementById("emp-tip")?.classList.remove("show");   // não deixar tooltip preso
   App.view = "dashboard";
   App.sheet = null;
-  if (!App.dashTab) App.dashTab = "status";              // 1ª tela ao entrar no projeto = Dashboard
+  if (!App.dashTab) App.dashTab = "empresa";             // 1ª aba do Dashboard = Empresas
   setLoc({ projectId: App.project?.id, projectName: App.project?.name, view: "dashboard" });
   renderSidebar();
   renderAppPresence();
@@ -1107,36 +1200,284 @@ async function showDashboard() {
   const tabs = h("div", { class: "dash-tabs" });
   const mkTab = (key, label) => h("button", { class: "dtab" + (App.dashTab === key ? " on" : ""),
     onClick: () => { if (App.dashTab === key) return; App.dashTab = key; showDashboard(); } }, label);
-  tabs.appendChild(mkTab("status", "Visão por status"));
+  tabs.appendChild(mkTab("empresa", "Empresas"));
+  tabs.appendChild(mkTab("status", "Abas"));
   tabs.appendChild(mkTab("users", "Usuários"));
   const body = h("div", { class: "dash-body", id: "dash-body" });
   gs.appendChild(tabs);
   gs.appendChild(body);
 
   if (App.dashTab === "users") return renderDashUsers(body);
+  if (App.dashTab === "empresa") return renderDashEmpresa(body);
   return renderDashStatus(body, gs);
+}
+
+/* ===== Dashboard · aba "Entregas por empresa" ===== */
+let RAMP_TOTAL = ["#E2EEEC", "#AFD2C9", "#6FB0A2", "#0c3530"]; // rampa neutra (teal) p/ "Todos"
+
+async function renderDashEmpresa(body) {
+  if (!App.empFilter) App.empFilter = "all";
+  clear(body);
+  body.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
+  let data;
+  try { data = await getEmpData(); }
+  catch (e) { clear(body); body.appendChild(h("p", { class: "muted", style: { padding: "28px" } }, "Erro ao carregar: " + (e.message || e))); return; }
+  if (App.view !== "dashboard" || App.dashTab !== "empresa") return;
+  clear(body);
+
+  if (!data.empresas.length) {
+    body.appendChild(h("div", { class: "dash-emp" },
+      h("div", { class: "emp-empty" },
+        h("h3", {}, "Nada para mostrar ainda"),
+        h("p", {}, "Cadastre as empresas (Configuração → Lista de Empresas) e confira a leitura das abas. O dashboard lê os status reais das planilhas cruzados com o campo Área das Solicitações."))));
+    return;
+  }
+
+  const wrap = h("div", { class: "dash-emp" });
+  body.appendChild(wrap);
+  wrap.appendChild(h("div", { class: "emp-kpis", id: "emp-kpis" }));
+  wrap.appendChild(h("div", { class: "emp-companies", id: "emp-companies" }));   // filtro por empresa (aplica a tudo)
+  const main = h("div", { class: "emp-main" });
+  const mxCard = h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Matriz · Empresa × Processo"), h("span", { class: "hint", id: "emp-hint" }, "")),
+    h("div", { class: "card-body" },
+      h("div", { class: "emp-filters", id: "emp-filters" }),
+      h("div", { class: "emp-mx-scroll" }, h("table", { class: "emp-mx", id: "emp-mx" })),
+      h("p", { class: "emp-note" }, "Clique (ou Enter) numa célula → abre a aba e seleciona a célula do item.")));
+  const rail = h("div", { class: "emp-rail" },
+    h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", {}, "Entregas por empresa"), h("span", { class: "hint" }, "ordenado por pendências")), h("div", { class: "card-body" }, h("div", { class: "emp-bars", id: "emp-bars" }))));
+  main.appendChild(mxCard); main.appendChild(rail);
+  wrap.appendChild(main);
+
+  empPaint();
+}
+
+/* empresas exibidas conforme o filtro por empresa (App.empCompany = null => todas) */
+function empCompaniesShown(data) { return App.empCompany ? data.empresas.filter((e) => e === App.empCompany) : data.empresas; }
+/* byStatus no escopo do filtro por empresa (p/ KPIs) */
+function empScopedByStatus(data) {
+  if (!App.empCompany) return data.byStatus;
+  const m = new Map();
+  data.areas.forEach((area) => { const c = data.matrix.get(App.empCompany)?.get(area); if (c) c.status.forEach((q, st) => m.set(st, (m.get(st) || 0) + q)); });
+  return m;
+}
+/* barra de tags de empresa (seleção única, contagem sutil) */
+function empCompanyFilter(host, data) {
+  if (!host) return;
+  clear(host);
+  const totByEmp = new Map();
+  data.empresas.forEach((emp) => { let t = 0; data.areas.forEach((area) => { const c = data.matrix.get(emp)?.get(area); if (c) t += c.total; }); totByEmp.set(emp, t); });
+  let grand = 0; totByEmp.forEach((v) => grand += v);
+  const tag = (key, label, n) => {
+    const on = (App.empCompany || "__all__") === key;
+    const b = h("button", { class: "cchip" + (on ? " on" : ""), onClick: () => { App.empCompany = (key === "__all__") ? null : key; empPaint(); } },
+      h("span", { class: "lb" }, label), h("span", { class: "n" }, String(n)));
+    return b;
+  };
+  host.appendChild(tag("__all__", "Todas", grand));
+  data.empresas.forEach((emp) => { if ((totByEmp.get(emp) || 0) > 0) host.appendChild(tag(emp, emp, totByEmp.get(emp))); });
+}
+
+/* re-render que depende dos filtros (empresa + status): tags + KPIs + matriz + barras + hint */
+function empPaint() {
+  const data = App._empData; if (!data) return;
+  empCompanyFilter(document.getElementById("emp-companies"), data);
+  empKpis(data);
+  empFilters(document.getElementById("emp-filters"), data);
+  empMatrix(document.getElementById("emp-mx"), data);
+  empBars(data);
+  const sel = App.empFilter;
+  const hint = document.getElementById("emp-hint");
+  if (hint) hint.textContent = "Mostrando: " + (sel === "all" ? "total de itens" : "status " + sel) + (App.empCompany ? " · " + App.empCompany : "");
+}
+
+/* stubs — preenchidos nas próximas tasks */
+function empKpis(data) {
+  const host = document.getElementById("emp-kpis"); if (!host) return;
+  let total = 0, recebido = 0, pend = 0;
+  empScopedByStatus(data).forEach((qtd, label) => {
+    total += qtd;
+    const cls = statusClassFor(label) || "na";
+    if (cls === "recebido") recebido += qtd;
+    else if (cls === "pendente" || cls === "analise" || cls === "parcial") pend += qtd;
+  });
+  const pct = total ? Math.round(recebido / total * 100) : 0;
+  const processos = data.areas.filter((a) => a !== "(sem área)").length;
+  const ico = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${p}</svg>`;
+  const card = (cls, p, label, val) => h("div", { class: "card stat" },
+    h("div", { class: "ico " + cls, html: ico(p) }),
+    h("div", {}, h("div", { class: "s-label" }, label), h("div", { class: "s-value", html: val })));
+  clear(host);
+  host.appendChild(card("c-total", '<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/>', "Itens mapeados", String(total)));
+  host.appendChild(card("c-ok", '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>', "Concluído (Recebido)", `${recebido}<small>${pct}%</small>`));
+  host.appendChild(card("c-pend", '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>', "Pendências (ação)", String(pend)));
+  host.appendChild(card("c-emp", '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>', "Empresas", String(empCompaniesShown(data).length)));
+  host.appendChild(card("c-proc", '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>', "Processos (Áreas)", String(processos)));
+}
+function empFilters(host, data) {
+  if (!host) return;
+  const byKey = new Map(); let totAll = 0;
+  data.byStatus.forEach((qtd, label) => { byKey.set(label, qtd); totAll += qtd; });
+  clear(host);
+  const chip = (key, label, n, cls) => {
+    const b = h("button", { class: "fchip" + (App.empFilter === key ? " on" : ""), "data-k": key },
+      h("span", { class: "dot " + (cls || "") }),
+      h("span", { class: "lb" }, label),
+      h("span", { class: "n" }, String(n)));
+    b.addEventListener("click", () => { App.empFilter = key; empPaint(); });
+    return b;
+  };
+  host.appendChild(chip("all", "Todos", totAll, "all"));
+  getStatusOptions().forEach((label) => { if (byKey.has(label)) host.appendChild(chip(label, label, byKey.get(label), statusClassFor(label) || "na")); });
+}
+
+function empMatrix(table, data) {
+  if (!table) return;
+  const sel = App.empFilter;            // "all" | label de status
+  const statuses = getStatusOptions();
+  const shown = empCompaniesShown(data);
+  // escala (máximo) para a intensidade da rampa
+  let max = 1;
+  shown.forEach((emp) => data.areas.forEach((area) => {
+    const c = data.matrix.get(emp)?.get(area); if (!c) return;
+    const v = sel === "all" ? c.total : (c.status.get(sel) || 0);
+    if (v > max) max = v;
+  }));
+  const idxOf = (v) => { const r = v / (max || 1); return r <= 0.34 ? 0 : r <= 0.67 ? 1 : 2; };
+  const compBar = (comp, tot) => statuses.map((st) => { const q = comp.get(st) || 0; return q ? `<i style="background:var(--st-${statusClassFor(st) || "na"});width:${q / (tot || 1) * 100}%"></i>` : ""; }).join("");
+
+  clear(table);
+  // thead
+  const trh = h("tr", {}, h("th", { class: "corner rh" }, "Empresa"));
+  data.areas.forEach((a) => trh.appendChild(h("th", { title: a }, a)));
+  trh.appendChild(h("th", { class: "col-tot" }, "Total"));
+  table.appendChild(h("thead", {}, trh));
+  // tbody + acumuladores p/ a linha de total
+  const tb = h("tbody", {});
+  const colTot = new Map(), colComp = new Map();    // area -> total / Map(status->qtd)
+  let grandTot = 0; const grandComp = new Map();
+  shown.forEach((emp) => {
+    const tr = h("tr", {}, h("th", { class: "rh" }, emp));
+    let rowTot = 0; const rowComp = new Map();
+    data.areas.forEach((area) => {
+      const c = data.matrix.get(emp)?.get(area);
+      const v = !c ? 0 : (sel === "all" ? c.total : (c.status.get(sel) || 0));
+      if (c) {
+        rowTot += c.total;
+        colTot.set(area, (colTot.get(area) || 0) + c.total);
+        if (!colComp.has(area)) colComp.set(area, new Map());
+        c.status.forEach((q, st) => {
+          rowComp.set(st, (rowComp.get(st) || 0) + q);
+          colComp.get(area).set(st, (colComp.get(area).get(st) || 0) + q);
+          grandComp.set(st, (grandComp.get(st) || 0) + q);
+        });
+      }
+      const td = h("td", {});
+      if (!c || v === 0) { td.appendChild(h("div", { class: "emp-cell empty" }, "·")); tr.appendChild(td); return; }
+      const ramp = sel === "all" ? RAMP_TOTAL : rampFor(sel);
+      const i = idxOf(v);
+      const compHtml = sel === "all" ? '<div class="comp">' + compBar(c.status, c.total) + "</div>" : "";
+      const cellEl = h("div", { class: "emp-cell has", tabindex: "0", role: "button",
+        style: { background: ramp[i], color: ramp[3] },
+        html: `<span>${v}</span>${compHtml}` });
+      cellEl.addEventListener("click", () => empGoTo(c));
+      cellEl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); empGoTo(c); } });
+      cellEl.addEventListener("mouseenter", (e) => empTip(e, emp, area, c));
+      cellEl.addEventListener("mousemove", (e) => empTip(e, emp, area, c, true));
+      cellEl.addEventListener("mouseleave", empTipHide);
+      td.appendChild(cellEl); tr.appendChild(td);
+    });
+    grandTot += rowTot;
+    tr.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(rowTot)), h("span", { class: "minibar", html: compBar(rowComp, rowTot) }))));
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  // tfoot: total por processo + total geral
+  const tf = h("tr", {}, h("th", { class: "rh" }, "Total"));
+  data.areas.forEach((area) => {
+    const t = colTot.get(area) || 0;
+    if (!t) { tf.appendChild(h("td", {}, h("div", { class: "emp-cell empty" }, "·"))); return; }
+    tf.appendChild(h("td", {}, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(t)), h("span", { class: "minibar", html: compBar(colComp.get(area) || new Map(), t) }))));
+  });
+  tf.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(grandTot)), h("span", { class: "minibar", html: compBar(grandComp, grandTot) }))));
+  table.appendChild(h("tfoot", {}, tf));
+}
+function empBars(data) {
+  const host = document.getElementById("emp-bars"); if (!host) return;
+  const statuses = getStatusOptions();
+  const isPend = (st) => { const k = statusClassFor(st) || "na"; return k === "pendente" || k === "analise" || k === "parcial"; };
+  const rows = empCompaniesShown(data).map((emp) => {
+    const agg = new Map(); let tot = 0;
+    data.areas.forEach((area) => { const c = data.matrix.get(emp)?.get(area); if (!c) return; c.status.forEach((q, st) => agg.set(st, (agg.get(st) || 0) + q)); tot += c.total; });
+    let pend = 0; agg.forEach((q, st) => { if (isPend(st)) pend += q; });
+    return { emp, agg, tot, pend };
+  }).filter((r) => r.tot > 0).sort((a, b) => b.pend - a.pend);
+  clear(host);
+  rows.forEach((r) => {
+    const seg = statuses.map((st) => { const q = r.agg.get(st) || 0; return q ? `<i style="background:var(--st-${statusClassFor(st) || "na"});width:${q / r.tot * 100}%" title="${escapeHtml(st)}: ${q}"></i>` : ""; }).join("");
+    const row = h("div", { class: "bar-row" },
+      h("div", { class: "top" }, h("span", { class: "nm" }, r.emp), h("span", { class: "tt", html: `<b>${r.pend}</b> pend · ${r.tot} itens` })),
+      h("div", { class: "track", html: seg }));
+    row.addEventListener("click", () => { App.empFilter = "all"; empPaint(); toast(`Empresa: ${r.emp} — ${r.tot} itens, ${r.pend} pendência(s).`); });
+    host.appendChild(row);
+  });
+}
+
+/* donut "Distribuição por status" removido (decisão 2026-06-25): a tab Empresas
+   não usa mais o gráfico de rosca; o card foi retirado do rail. */
+
+function empGoTo(c) {
+  empTipHide();   // some com o tooltip antes de navegar (o DOM da matriz é destruído e o mouseleave não dispara)
+  if (!c || !c.targets.length) return;
+  const sel = App.empFilter;
+  const t = (sel !== "all" && c.targets.find((x) => x.status === sel)) || c.targets[0];
+  goToCell(App.project.id, t.sheetId, t.row, t.col);
+}
+
+function empTipHide() { const t = document.getElementById("emp-tip"); if (t) t.classList.remove("show"); }
+function empTipEl() {
+  let t = document.getElementById("emp-tip");
+  if (!t) { t = h("div", { id: "emp-tip" }); document.body.appendChild(t); }
+  return t;
+}
+function empTip(e, emp, area, c, moveOnly) {
+  const t = empTipEl();
+  if (!moveOnly) {
+    const rows = getStatusOptions().filter((st) => c.status.get(st)).map((st) =>
+      `<div class="tt-r"><span class="sw" style="background:var(--st-${statusClassFor(st) || "na"})"></span>${escapeHtml(st)}<span class="v">${c.status.get(st)}</span></div>`).join("");
+    t.innerHTML = `<div class="tt-h">${escapeHtml(emp)} · ${escapeHtml(area)}</div>${rows}<div class="tt-f">Clique → abrir a aba na célula</div>`;
+    t.classList.add("show");
+  }
+  const pad = 14, w = t.offsetWidth, hh = t.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y + hh > innerHeight - 8) y = e.clientY - hh - pad;
+  t.style.left = x + "px"; t.style.top = y + "px";
 }
 
 async function renderDashStatus(body, gs) {
   body.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
-  let rows;
-  try { rows = await store.loadStatusAggregate(App.project); }
-  catch (e) { clear(body); body.appendChild(h("p", { class: "muted", style: { padding: "28px" } }, "Erro ao carregar: " + e.message)); return; }
+  let data;
+  try { data = await getEmpData(); }
+  catch (e) { clear(body); body.appendChild(h("p", { class: "muted", style: { padding: "28px" } }, "Erro ao carregar: " + (e.message || e))); return; }
   if (App.view !== "dashboard" || App.dashTab !== "status") return;
 
   const sheetName = new Map(App.sheets.map((s) => [s.id, s.name]));
+  // P5.1: contagem pelo CRUZAMENTO Empresa×Status (parseAbas) — ignora status soltos
   const agg = new Map(); let grand = 0;
-  for (const r of rows) {
-    const label = normStatusLabel(r.value); if (!label) continue;
-    if (!agg.has(label)) agg.set(label, { total: 0, sheets: new Map() });
-    const a = agg.get(label); a.total++; grand++;
-    a.sheets.set(r.sheet_id, (a.sheets.get(r.sheet_id) || 0) + 1);
-  }
+  data.bySheetStatus.forEach((stMap, sheetId) => {
+    stMap.forEach((cnt, label) => {
+      const lab = normStatusLabel(label); if (!lab) return;
+      if (!agg.has(lab)) agg.set(lab, { total: 0, sheets: new Map() });
+      const a = agg.get(lab); a.total += cnt; grand += cnt;
+      a.sheets.set(sheetId, (a.sheets.get(sheetId) || 0) + cnt);
+    });
+  });
   const order = [...getStatusOptions()];
   for (const k of agg.keys()) if (!order.includes(k)) order.push(k);
 
   clear(body);
-  body.appendChild(h("p", { class: "sub" }, `Visão por status · ${grand} itens em ${App.sheets.length} abas. Clique num card para ver as abas; clique numa aba para abri-la.`));
+  body.appendChild(h("p", { class: "sub" }, `Por aba · ${grand} itens no cruzamento Empresa×Status, em ${data.bySheetStatus.size} aba(s). Clique num card para ver as abas; clique numa aba para abri-la.`));
   const gridEl = h("div", { class: "kpi-grid" });
   for (const label of order) {
     const a = agg.get(label); if (!a) continue;
@@ -1147,10 +1488,10 @@ async function renderDashStatus(body, gs) {
       sheetsBox.appendChild(h("div", { class: "srow", onClick: (e) => { e.stopPropagation(); goSheet(App.project.id, sid); } },
         h("span", {}, sheetName.get(sid) || "—"), h("span", { class: "cnt" }, String(cnt))));
     });
-    card.appendChild(h("span", { class: "chip " + cls }, label));
-    card.appendChild(h("div", { class: "val" }, String(a.total)));
-    card.appendChild(h("div", { class: "lbl" }, `${a.sheets.size} aba(s)`));
-    card.appendChild(h("div", { class: "bar", style: { background: `var(--st-${cls})` } }));
+    card.appendChild(h("div", { class: "kpi-top" },
+      h("span", { class: "chip " + cls }, label),
+      h("div", { class: "val" }, String(a.total))));
+    card.appendChild(h("div", { class: "lbl" }, `${a.sheets.size} aba(s) · clique para abrir`));
     card.appendChild(sheetsBox);
     gridEl.appendChild(card);
   }
@@ -1189,6 +1530,64 @@ function heatTd(v, ramp, max) {
 }
 function kpi(label, val) { return h("div", { class: "u-kpi" }, h("div", { class: "l" }, label), h("div", { class: "v" }, val)); }
 
+/* P6 — modal amplo de drill por usuário: entregas (mudanças de status em células
+   do cruzamento) agrupadas por empresa → aba, expansíveis até a célula. */
+async function openUserDrill(user) {
+  const scrim = h("div", { class: "scrim" });
+  const close = () => scrim.remove();
+  const bodyEl = h("div", { class: "u-drill" }, h("div", { class: "spinner", style: { margin: "40px auto" } }));
+  const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
+  const head = h("div", { style: { display: "flex", alignItems: "center", gap: "10px" } }, avatarEl(user, 32), h("h3", { style: { margin: 0 } }, "Entregas de " + (user.name || "—")));
+  const modal = h("div", { class: "modal wide" }, head, bodyEl, foot);
+  scrim.appendChild(modal);
+  scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
+  document.body.appendChild(scrim);
+
+  let data, changes;
+  try {
+    data = await getEmpData();
+    changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), { userId: user.id });
+  } catch (e) { clear(bodyEl); bodyEl.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Erro ao carregar: " + (e.message || e))); return; }
+
+  const statusSet = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
+  const byEmp = new Map();   // empresa -> Map(sheetName -> {sheetId, items:[{row,col,status,changed_at}]})
+  let total = 0;
+  for (const ch of changes) {
+    const nv = String(ch.new_value || "").trim(); if (!nv || !statusSet.has(nv.toLowerCase())) continue;
+    const ci = data.cellIndex.get(ch.sheet_id + ":" + ch.row + ":" + ch.col); if (!ci) continue;
+    total++;
+    if (!byEmp.has(ci.empresa)) byEmp.set(ci.empresa, new Map());
+    const sm = byEmp.get(ci.empresa);
+    if (!sm.has(ci.sheetName)) sm.set(ci.sheetName, { sheetId: ci.sheetId, items: [] });
+    sm.get(ci.sheetName).items.push({ row: ch.row, col: ch.col, status: nv, changed_at: ch.changed_at });
+  }
+
+  clear(bodyEl);
+  if (!total) { bodyEl.appendChild(h("p", { class: "muted", style: { padding: "24px", textAlign: "center" } }, "Sem entregas (mudanças de status em células do cruzamento) para esta pessoa.")); return; }
+  bodyEl.appendChild(h("p", { class: "sub", style: { margin: "0 0 12px" } }, `${total} entrega(s) em ${byEmp.size} empresa(s). Expanda uma aba para ver as células e ir direto nelas.`));
+
+  [...byEmp.keys()].sort((a, b) => a.localeCompare(b, "pt")).forEach((emp) => {
+    const sm = byEmp.get(emp);
+    let empTot = 0; sm.forEach((v) => empTot += v.items.length);
+    const grp = h("div", { class: "ud-emp" });
+    grp.appendChild(h("div", { class: "ud-emp-h" }, h("span", { class: "ud-emp-nm" }, emp), h("span", { class: "ud-emp-n" }, String(empTot))));
+    [...sm.entries()].sort((a, b) => a[0].localeCompare(b[0], "pt")).forEach(([sheetName, info]) => {
+      const det = h("details", { class: "ud-aba" });
+      det.appendChild(h("summary", {}, h("span", { class: "ud-aba-nm" }, sheetName), h("span", { class: "ud-aba-n" }, String(info.items.length))));
+      const list = h("div", { class: "ud-cells" });
+      info.items.sort((a, b) => String(b.changed_at).localeCompare(String(a.changed_at))).forEach((it) => {
+        list.appendChild(h("div", { class: "ud-cell" },
+          h("span", { class: "chip " + (statusClassFor(it.status) || "na") }, it.status),
+          h("span", { class: "ud-when" }, fmtDate(it.changed_at)),
+          h("button", { class: "btn btn-ghost btn-sm", onClick: () => { close(); goToCell(App.project.id, info.sheetId, it.row, it.col); } }, "Ir à célula")));
+      });
+      det.appendChild(list);
+      grp.appendChild(det);
+    });
+    bodyEl.appendChild(grp);
+  });
+}
+
 async function renderDashUsers(body) {
   if (!App.usersOrient) App.usersOrient = "su";
   if (!App.usersPeriod) App.usersPeriod = "30";
@@ -1201,7 +1600,7 @@ async function renderDashUsers(body) {
   };
   body.appendChild(h("div", { class: "dash-head" },
     h("div", {}, h("h2", {}, "Medidor de entregas"),
-      h("p", { class: "sub" }, "Mudanças de status por pessoa · cada mudança conta como uma entrega")),
+      h("p", { class: "sub" }, "Mudanças de status (no cruzamento Empresa×Status) · clique numa pessoa para o detalhe")),
     h("div", { class: "dash-ctrls" },
       seg([["7", "7 dias"], ["30", "30 dias"], ["all", "Tudo"]], App.usersPeriod, (k) => { App.usersPeriod = k; renderDashUsers(body); }),
       seg([["su", "Status × Usuário"], ["us", "Usuário × Status"]], App.usersOrient, (k) => { App.usersOrient = k; renderDashUsers(body); }))));
@@ -1210,13 +1609,30 @@ async function renderDashUsers(body) {
 
   const days = App.usersPeriod === "7" ? 7 : App.usersPeriod === "30" ? 30 : null;
   const since = days ? new Date(Date.now() - days * 86400000) : null;
+  // P5.2: medidor = mudanças de status só em células do cruzamento Empresa×Status (parseAbas)
   let rows;
-  try { rows = await store.loadUserActivity(App.project, since); }
-  catch (e) {
-    spin.remove();
-    const hint = /function|does not exist|404|user_status_activity/i.test(e.message || "") ? " — rode sql/14_user_metrics.sql no Supabase." : "";
-    body.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Não consegui carregar o medidor: " + e.message + hint));
-    return;
+  try {
+    const data = await getEmpData();
+    const statusSet = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
+    const changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), { since });
+    const ag = new Map();
+    for (const ch of changes) {
+      const nv = String(ch.new_value || "").trim(); if (!nv || !statusSet.has(nv.toLowerCase())) continue;
+      if (!data.cellIndex.has(ch.sheet_id + ":" + ch.row + ":" + ch.col)) continue;
+      const dia = String(ch.changed_at).slice(0, 10);
+      const k = ch.changed_by + "|" + nv + "|" + dia;
+      ag.set(k, (ag.get(k) || 0) + 1);
+    }
+    rows = [...ag.entries()].map(([k, qtd]) => { const i = k.indexOf("|"), j = k.lastIndexOf("|"); return { user_id: k.slice(0, i), status: k.slice(i + 1, j), dia: k.slice(j + 1), qtd }; });
+  } catch (e) {
+    // fallback defensivo: RPC original (não quebra o medidor se o cruzamento falhar)
+    try { rows = await store.loadUserActivity(App.project, since); }
+    catch (e2) {
+      spin.remove();
+      const hint = /function|does not exist|404|user_status_activity/i.test(e2.message || "") ? " — rode sql/14_user_metrics.sql no Supabase." : "";
+      body.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Não consegui carregar o medidor: " + (e2.message || e2) + hint));
+      return;
+    }
   }
   if (App.view !== "dashboard" || App.dashTab !== "users") return;
   spin.remove();
@@ -1272,7 +1688,7 @@ function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, col
   const table = h("table", { class: "umx" });
   if (orient === "su") {
     const head = h("tr", {}, h("th", { class: "rh" }, "Status"));
-    users.forEach((u) => head.appendChild(h("th", { title: u.name }, avatarEl(u, 24))));
+    users.forEach((u) => head.appendChild(h("th", { class: "u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24))));
     head.appendChild(h("th", {}, "Total"));
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
@@ -1295,7 +1711,7 @@ function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, col
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
     users.forEach((u) => {
-      const tr = h("tr", {}, h("td", { class: "rh" }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+      const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
       statuses.forEach((st) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, rampFor(st), mmax)));
       tr.appendChild(h("td", { class: "tot" }, String(rowByUser(u.id))));
       tb.appendChild(tr);
@@ -1321,7 +1737,7 @@ function buildDaily(users, dias, perDay, dmax) {
   table.appendChild(h("thead", {}, head));
   const tb = h("tbody", {});
   users.forEach((u) => {
-    const tr = h("tr", {}, h("td", { class: "rh" }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+    const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
     let t = 0;
     dias.forEach((d) => { const v = (perDay[u.id] || {})[d] || 0; t += v; tr.appendChild(heatTd(v, ramp, dmax)); });
     tr.appendChild(h("td", { class: "tot" }, String(t)));
@@ -2288,19 +2704,41 @@ async function openCompaniesManager() {
   } else {
     const listBox = h("div", { class: "lm-list" });
     const detectBox = h("div", { class: "lm-detect" });
+    const keyOf = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
     const row = (o) => {
       const label = h("input", { class: "input lm-label", value: o.label });
+      const aliases = Array.isArray(o.aliases) ? [...o.aliases] : [];
+      const chipsBox = h("div", { class: "lm-aliases" });
+      const aliasInput = h("input", { class: "lm-alias-add", placeholder: "+ grafia (Enter)" });
+      const renderChips = () => {
+        clear(chipsBox);
+        aliases.forEach((a, i) => chipsBox.appendChild(h("span", { class: "lm-alias" },
+          h("span", {}, a),
+          h("button", { class: "lm-alias-x", title: "Remover grafia", onClick: () => { aliases.splice(i, 1); renderChips(); } }, "✕"))));
+        chipsBox.appendChild(aliasInput);
+      };
+      aliasInput.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const v = aliasInput.value.trim(); if (!v) return;
+        const k = keyOf(v);
+        if (k === keyOf(label.value) || aliases.some((a) => keyOf(a) === k)) { aliasInput.value = ""; return; }
+        const clash = list.find((x) => x.id !== o.id && (keyOf(x.label) === k || (Array.isArray(x.aliases) && x.aliases.some((a) => keyOf(a) === k))));
+        if (clash) return toast(`"${v}" já pertence a ${clash.label}.`, "err");
+        aliases.push(v); aliasInput.value = ""; renderChips();
+      });
       const save = h("button", { class: "btn btn-sm", onClick: async () => {
         const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
-        try { const saved = await store.upsertCompany({ id: o.id, label: nl, position: o.position }); Object.assign(o, saved); await reloadCompanies(); toast("Empresa salva."); }
+        try { const saved = await store.upsertCompany({ id: o.id, label: nl, position: o.position, aliases }); Object.assign(o, saved); App._empData = null; await reloadCompanies(); toast("Empresa salva."); }
         catch (e) { toast("Erro ao salvar: " + (e.message || e), "err"); }
       } }, "Salvar");
       const del = h("button", { class: "btn btn-ghost btn-sm", title: "Remover", onClick: async () => {
         if (!(await confirmModal("Remover empresa", `Remover "${o.label}" da lista?`))) return;
-        try { await store.deleteCompany(o.id); list = list.filter((x) => x.id !== o.id); render(); await reloadCompanies(); }
+        try { await store.deleteCompany(o.id); list = list.filter((x) => x.id !== o.id); render(); await reloadCompanies(); App._empData = null; }
         catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
       } }, "✕");
-      return h("div", { class: "lm-row" }, label, save, del);
+      renderChips();
+      return h("div", { class: "lm-row" }, h("div", { class: "lm-row-top" }, label, save, del), chipsBox);
     };
     const render = () => {
       clear(listBox);
@@ -2325,26 +2763,42 @@ async function openCompaniesManager() {
       cand = cand.filter((x) => !have.has(x.label.toLowerCase())).slice(0, 30);
       clear(detectBox);
       if (!cand.length) { detectBox.appendChild(h("p", { class: "muted" }, "Nenhuma empresa nova detectada.")); return; }
-      detectBox.appendChild(h("p", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } }, "Marque as que são empresas e clique em adicionar:"));
+      detectBox.appendChild(h("p", { class: "muted", style: { fontSize: "12px", margin: "0 0 8px" } }, "Marque os rótulos e escolha: criar empresa nova OU anexar como grafia de uma existente."));
       const checks = [];
       cand.forEach((c) => {
         const cb = h("input", { type: "checkbox", checked: c.sheets >= 2 });
-        checks.push({ cb, label: c.label });
+        const sel = h("select", { class: "bld-select lm-detect-sel" });
+        sel.appendChild(h("option", { value: "__new__" }, "criar empresa nova"));
+        list.forEach((co) => sel.appendChild(h("option", { value: co.id }, "grafia de: " + co.label)));
+        checks.push({ cb, label: c.label, sel });
         detectBox.appendChild(h("label", { class: "lm-detect-row" }, cb,
           h("span", { class: "lm-detect-lbl" }, c.label),
-          h("span", { class: "muted", style: { fontSize: "11px" } }, `${c.sheets} aba(s) · ${c.count}×`)));
+          h("span", { class: "muted", style: { fontSize: "11px" } }, `${c.sheets} aba(s) · ${c.count}×`),
+          sel));
       });
       detectBox.appendChild(h("button", { class: "btn btn-primary btn-sm", style: { marginTop: "10px" }, onClick: async () => {
-        const sel = checks.filter((x) => x.cb.checked).map((x) => x.label);
-        if (!sel.length) return toast("Marque ao menos uma.");
-        try { await store.addCompanies(sel); list = await store.loadCompanies(); render(); await reloadCompanies(); clear(detectBox); toast(`${sel.length} empresa(s) adicionada(s).`); }
-        catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
-      } }, "Adicionar selecionadas"));
+        const chosen = checks.filter((x) => x.cb.checked);
+        if (!chosen.length) return toast("Marque ao menos um.");
+        const novas = chosen.filter((x) => x.sel.value === "__new__").map((x) => x.label);
+        const anexar = chosen.filter((x) => x.sel.value !== "__new__");
+        try {
+          if (novas.length) await store.addCompanies(novas);
+          const byTarget = new Map();
+          anexar.forEach((x) => { if (!byTarget.has(x.sel.value)) byTarget.set(x.sel.value, []); byTarget.get(x.sel.value).push(x.label); });
+          for (const [id, labels] of byTarget) {
+            const co = list.find((c) => c.id === id); if (!co) continue;
+            const merged = [...new Set([...(co.aliases || []), ...labels])];
+            await store.upsertCompany({ id, label: co.label, position: co.position, aliases: merged });
+          }
+          list = await store.loadCompanies(); render(); await reloadCompanies(); App._empData = null; clear(detectBox);
+          toast(`${chosen.length} item(ns) aplicado(s).`);
+        } catch (e) { toast("Erro: " + (e.message || e), "err"); }
+      } }, "Aplicar selecionados"));
     }
 
     body.appendChild(h("div", { class: "lm-card" },
       h("h4", {}, "Empresas"),
-      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nomes exatamente como aparecem nas abas (cabeçalho de coluna ou coluna “Empresa”). Alimentam o cruzamento Empresa × Status."),
+      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nome canônico da empresa. Em “+ grafia” registre outras formas de escrita (ex.: GO ↔ EQTL GO) — todas contam sob o canônico, sem mexer nas abas."),
       listBox,
       h("div", { style: { marginTop: "10px", display: "flex", gap: "8px" } }, addBtn, detectBtn),
       detectBox));
@@ -2495,6 +2949,68 @@ async function computeAbaStatusCounts() {
   return m;
 }
 
+/* Cruza parseAbas (empresa×status por aba) com o campo Área das Solicitações
+   (sheet_link → area[]). Retorna empresas, áreas (processos) e a matriz de
+   contagens com alvos de navegação (sheetId/row/col) por célula. */
+async function computeEmpresaAreaData() {
+  // 1) mapa aba(nome) -> Set(áreas) a partir das Solicitações
+  let solic = App._solicRows;
+  if (!Array.isArray(solic)) { try { solic = await store.loadSolicitacoes(App.project); } catch (_) { solic = []; } }
+  const abaToAreas = new Map();
+  for (const r of solic) {
+    const aba = String(r.sheet_link || "").trim(); if (!aba) continue;
+    if (!abaToAreas.has(aba)) abaToAreas.set(aba, new Set());
+    (Array.isArray(r.area) ? r.area : []).filter(Boolean).forEach((a) => abaToAreas.get(aba).add(a));
+  }
+  // 2) parser: empresa × status por aba (mesma chamada do computeAbaStatusCounts)
+  const parsed = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
+  // 3) cruza: matrix[empresa][área] = { status:Map(label->qtd), total, targets:[{sheetId,row,col,status}] }
+  const empresas = new Set(), areas = new Set();
+  const matrix = new Map();
+  const cell = (emp, area) => {
+    if (!matrix.has(emp)) matrix.set(emp, new Map());
+    const row = matrix.get(emp);
+    if (!row.has(area)) row.set(area, { status: new Map(), total: 0, targets: [] });
+    return row.get(area);
+  };
+  const bySheetStatus = new Map();   // sheetId -> Map(status -> qtd)  (1 por registro)
+  const cellIndex = new Map();       // "sheetId:row:col" -> {sheetId,sheetName,row,col,empresa,areas:Set}
+  for (const { sheet, res } of parsed.perSheet) {
+    const aba = String(sheet.name || "").trim();
+    let abaAreas = [...(abaToAreas.get(aba) || [])];
+    if (!abaAreas.length) abaAreas = ["(sem área)"];
+    for (const rec of res.records) {
+      empresas.add(rec.empresa);
+      if (!bySheetStatus.has(sheet.id)) bySheetStatus.set(sheet.id, new Map());
+      const bs = bySheetStatus.get(sheet.id);
+      bs.set(rec.status, (bs.get(rec.status) || 0) + 1);
+      const ck = sheet.id + ":" + rec.row + ":" + rec.col;
+      if (!cellIndex.has(ck)) cellIndex.set(ck, { sheetId: sheet.id, sheetName: sheet.name, row: rec.row, col: rec.col, empresa: rec.empresa, areas: new Set(abaAreas) });
+      for (const area of abaAreas) {
+        areas.add(area);
+        const c = cell(rec.empresa, area);
+        c.status.set(rec.status, (c.status.get(rec.status) || 0) + 1);
+        c.total++;
+        c.targets.push({ sheetId: sheet.id, row: rec.row, col: rec.col, status: rec.status });
+      }
+    }
+  }
+  const byArea = (a, b) => a === "(sem área)" ? 1 : b === "(sem área)" ? -1 : a.localeCompare(b, "pt");
+  return {
+    empresas: [...empresas].sort((a, b) => a.localeCompare(b, "pt")),
+    areas: [...areas].sort(byArea),
+    matrix, byStatus: parsed.byStatus, total: parsed.total,
+    bySheetStatus, cellIndex,
+  };
+}
+
+/* cache do cruzamento (1 parse por carga de projeto; reusado entre as tabs).
+   Invalidado em refreshSheets (mudança de abas). */
+async function getEmpData() {
+  if (!App._empData) App._empData = await computeEmpresaAreaData();
+  return App._empData;
+}
+
 /* semeia a tabela solicitacoes a partir da aba índice (1ª abertura) */
 async function seedSolicitacoes() {
   const idxRows = await store.readIndexRows(App.project, App.sheets);
@@ -2524,7 +3040,7 @@ async function showSolicitacoes() {
   setLoc({ projectId: App.project?.id, projectName: App.project?.name, view: "solicitacoes" });
   renderSidebar();
   renderAppPresence(); updateCellPresence();
-  document.querySelectorAll(".side-nav-item.active").forEach((e) => e.classList.remove("active"));
+  document.querySelectorAll(".proj-nav .pn-item.active").forEach((e) => e.classList.remove("active"));
   $("#nav-solic")?.classList.add("active");
   { const cr = $("#crumb"); if (cr) { clear(cr); cr.appendChild(h("span", { class: "crumb-name" }, "Solicitações")); } }
   const tb = document.querySelector(".toolbar"); if (tb) tb.style.display = "none";
