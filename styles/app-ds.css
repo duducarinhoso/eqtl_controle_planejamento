@@ -78,6 +78,8 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 
 /* ---- superfícies de modal/menu/toast no estilo do modelo (o legado fixava #fff → quebrava no dark) ---- */
 .modal{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+/* corpo de modal: .muted legado (--on-surface-variant) é escuro fixo e sumia no dark → token tema-aware */
+.modal .muted{ color:var(--text-muted); }
 .ctx-menu{ background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
 .ctx-menu button{ color:var(--text); }
 .ctx-menu button:hover{ background:var(--hover); }

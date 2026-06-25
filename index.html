@@ -12,14 +12,14 @@
 
   <!-- Design System v2 (modelos/design-system_v2.html) — CSS verbatim do modelo -->
   <!-- ?v=N = numero de versao para cache. Ao publicar mudancas, suba o N (mesmo numero em todos abaixo + no importmap/app.js). -->
-  <link rel="stylesheet" href="styles/design-system.css?v=14" />
+  <link rel="stylesheet" href="styles/design-system.css?v=15" />
 
-  <link rel="stylesheet" href="styles/tokens.css?v=14" />
-  <link rel="stylesheet" href="styles/app.css?v=14" />
-  <link rel="stylesheet" href="styles/login.css?v=14" />
-  <link rel="stylesheet" href="styles/home.css?v=14" />
-  <link rel="stylesheet" href="styles/app-ds.css?v=14" />
-  <link rel="stylesheet" href="styles/solic.css?v=14" />
+  <link rel="stylesheet" href="styles/tokens.css?v=15" />
+  <link rel="stylesheet" href="styles/app.css?v=15" />
+  <link rel="stylesheet" href="styles/login.css?v=15" />
+  <link rel="stylesheet" href="styles/home.css?v=15" />
+  <link rel="stylesheet" href="styles/app-ds.css?v=15" />
+  <link rel="stylesheet" href="styles/solic.css?v=15" />
 </head>
 <body>
   <!-- estado de carregamento inicial -->
@@ -32,31 +32,31 @@
   <div id="app-root" hidden></div>
 
   <!-- carrega config (copie config.example.js -> config.js) -->
-  <script src="config.js?v=14"></script>
+  <script src="config.js?v=15"></script>
   <!-- Chart.js + JS do modelo (charts/gauges/sparklines/sidebar/tema) verbatim -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script defer src="js/ds.js?v=14"></script>
+  <script defer src="js/ds.js?v=15"></script>
 
   <!-- Cache-busting de TODOS os modulos JS num so lugar. O app.js importa estes
        arquivos sem ?v=; o importmap reescreve cada um para a versao carimbada.
-       AO PUBLICAR UMA MUDANCA: troque o numero 14 por 15 (aqui, nos <link> acima,
+       AO PUBLICAR UMA MUDANCA: troque o numero 15 por 16 (aqui, nos <link> acima,
        no config.js/ds.js e no app.js abaixo). O navegador de todos baixa de novo. -->
   <script type="importmap">
   {
     "imports": {
-      "./js/supabase.js": "./js/supabase.js?v=14",
-      "./js/auth.js": "./js/auth.js?v=14",
-      "./js/store.js": "./js/store.js?v=14",
-      "./js/grid.js": "./js/grid.js?v=14",
-      "./js/realtime.js": "./js/realtime.js?v=14",
-      "./js/excel.js": "./js/excel.js?v=14",
-      "./js/parser.js": "./js/parser.js?v=14",
-      "./js/solic.js": "./js/solic.js?v=14",
-      "./js/util.js": "./js/util.js?v=14"
+      "./js/supabase.js": "./js/supabase.js?v=15",
+      "./js/auth.js": "./js/auth.js?v=15",
+      "./js/store.js": "./js/store.js?v=15",
+      "./js/grid.js": "./js/grid.js?v=15",
+      "./js/realtime.js": "./js/realtime.js?v=15",
+      "./js/excel.js": "./js/excel.js?v=15",
+      "./js/parser.js": "./js/parser.js?v=15",
+      "./js/solic.js": "./js/solic.js?v=15",
+      "./js/util.js": "./js/util.js?v=15"
     }
   }
   </script>
   <!-- ponto de entrada -->
-  <script type="module" src="js/app.js?v=14"></script>
+  <script type="module" src="js/app.js?v=15"></script>
 </body>
 </html>
