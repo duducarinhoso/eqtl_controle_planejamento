@@ -84,11 +84,6 @@ export function statusClassFor(label) {
   return statusClass(label);
 }
 
-/* lista de EMPRESAS (rotulos), alimentada pela tabela companies */
-let _companies = [];
-export function getCompanies() { return _companies; }
-export function setCompanies(list) { _companies = Array.isArray(list) ? list.map((o) => (typeof o === "string" ? o : o.label)) : []; }
-
 /* cor estavel a partir de uma string (fallback p/ avatar) */
 export function colorFromString(str) {
   const palette = ["#1a5fa8", "#16a34a", "#d97706", "#7c3aed", "#ea580c", "#2563eb", "#0e7490", "#be123c"];
@@ -102,3 +97,8 @@ export function fmtDate(iso) {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+
+/* lista de EMPRESAS (rotulos), alimentada pela tabela companies */
+let _companies = [];
+export function getCompanies() { return _companies; }
+export function setCompanies(list) { _companies = Array.isArray(list) ? list.map((o) => (typeof o === "string" ? o : o.label)) : []; }
