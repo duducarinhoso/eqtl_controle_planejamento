@@ -72,16 +72,28 @@ export const STATUS_OPTIONS = ["Pendente", "Recebido", "Em análise", "Parcial",
    Comecam com o padrao embutido e sao substituidos apos loadStatusOptions(). */
 let _statusOptions = [...STATUS_OPTIONS];
 let _statusClassMap = new Map();
+let _statusCategoryMap = new Map();
+/* I-0015: "Status Geral" (categoria) por item — concluido | pendencia | na.
+   É o que o dashboard usa nos KPIs (cor virou só identidade visual, desacoplada).
+   Fallback para itens sem categoria gravada: deriva da klass herdada (legado). */
+const KLASS_CATEGORY = { recebido: "concluido", pendente: "pendencia", analise: "pendencia", parcial: "pendencia", na: "na" };
 export function getStatusOptions() { return _statusOptions; }
 export function setStatusOptions(list) {
   if (!Array.isArray(list) || !list.length) return;
   _statusOptions = list.map((o) => o.label);
   _statusClassMap = new Map(list.map((o) => [o.label, o.klass || statusClass(o.label) || "na"]));
+  _statusCategoryMap = new Map(list.map((o) => [o.label, o.categoria || KLASS_CATEGORY[o.klass] || "na"]));
 }
 /* classe de cor do chip: usa o mapa do banco e cai no statusClass por palavra-chave */
 export function statusClassFor(label) {
   if (_statusClassMap.has(label)) return _statusClassMap.get(label);
   return statusClass(label);
+}
+/* "Status Geral" do rótulo: usa o mapa do banco; para texto livre, deriva da klass.
+   Default "na" (nem concluído nem pendência) preserva o comportamento de células soltas. */
+export function statusCategoryFor(label) {
+  if (_statusCategoryMap.has(label)) return _statusCategoryMap.get(label);
+  return KLASS_CATEGORY[statusClassFor(label)] || "na";
 }
 
 /* cor estavel a partir de uma string (fallback p/ avatar) */

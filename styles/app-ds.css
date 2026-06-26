@@ -206,6 +206,12 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 .chip.analise{ background:#246b78; color:#fff; }
 .chip.parcial{ background:#b85c2e; color:#fff; }
 .chip.na{ background:transparent; color:var(--text-muted); box-shadow:inset 0 0 0 1px var(--border); }
+/* I-0015 — cores livres adicionais (todas ≥4.5:1 com texto branco) */
+.chip.azul{ background:#2f5fa0; color:#fff; }
+.chip.ciano{ background:#0e7490; color:#fff; }
+.chip.roxo{ background:#5b4b9e; color:#fff; }
+.chip.rosa{ background:#9d3b6b; color:#fff; }
+.chip.vermelho{ background:#b3322f; color:#fff; }
 
 /* heatmaps/matrizes como .tbl dentro de .card */
 .u-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:var(--gap); margin-bottom:var(--gap); }
@@ -278,6 +284,11 @@ table.umx .hcell{ min-width:34px; border-radius:4px; padding:4px 6px; font-varia
 .dash-emp .fchip .dot.analise{background:var(--st-analise)}
 .dash-emp .fchip .dot.parcial{background:var(--st-parcial)}
 .dash-emp .fchip .dot.na{background:var(--st-na)}
+.dash-emp .fchip .dot.azul{background:var(--st-azul)}
+.dash-emp .fchip .dot.ciano{background:var(--st-ciano)}
+.dash-emp .fchip .dot.roxo{background:var(--st-roxo)}
+.dash-emp .fchip .dot.rosa{background:var(--st-rosa)}
+.dash-emp .fchip .dot.vermelho{background:var(--st-vermelho)}
 .dash-emp .fchip .lb{color:var(--text)}
 .dash-emp .fchip .n{color:var(--text-dim);font-variant-numeric:tabular-nums}
 .dash-emp .fchip:hover{border-color:var(--text-dim);color:var(--text)}
@@ -559,3 +570,7 @@ table.umx th.u-col .u-col-nm{ display:block; max-width:78px; margin:0 auto; font
 .lm-sw:hover{ transform:scale(1.08); }
 .lm-sw.on{ box-shadow:0 0 0 2px var(--card-bg), 0 0 0 4px var(--blue); }
 .lm-sw:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+/* I-0015 — linha de controles do item: cor (swatches) + Status Geral (categoria) */
+.lm-ctl{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.lm-ctl-l{ font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+.lm-cat{ width:auto; min-width:130px; padding:5px 8px; }

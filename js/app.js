@@ -6,7 +6,7 @@ import * as rt from "./realtime.js";
 import * as excel from "./excel.js";
 import { parseAbas } from "./parser.js";
 import { openSolic, refreshSolic } from "./solic.js";
-import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, getCompanies, setCompanies } from "./util.js";
+import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, statusCategoryFor, getCompanies, setCompanies } from "./util.js";
 
 /* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
    tentando montar os gráficos/medidores DEMO do modelo (IDs lastWeekChart/topProductsChart/
@@ -1306,9 +1306,9 @@ function empKpis(data) {
   let total = 0, recebido = 0, pend = 0;
   empScopedByStatus(data).forEach((qtd, label) => {
     total += qtd;
-    const cls = statusClassFor(label) || "na";
-    if (cls === "recebido") recebido += qtd;
-    else if (cls === "pendente" || cls === "analise" || cls === "parcial") pend += qtd;
+    const cat = statusCategoryFor(label);   // I-0015: KPIs pela categoria, não pela cor
+    if (cat === "concluido") recebido += qtd;
+    else if (cat === "pendencia") pend += qtd;
   });
   const pct = total ? Math.round(recebido / total * 100) : 0;
   const processos = data.areas.filter((a) => a !== "(sem área)").length;
@@ -1318,8 +1318,8 @@ function empKpis(data) {
     h("div", {}, h("div", { class: "s-label" }, label), h("div", { class: "s-value", html: val })));
   clear(host);
   host.appendChild(card("c-total", '<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/>', "Itens mapeados", String(total)));
-  host.appendChild(card("c-ok", '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>', "Concluído (Recebido)", `${recebido}<small>${pct}%</small>`));
-  host.appendChild(card("c-pend", '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>', "Pendências (ação)", String(pend)));
+  host.appendChild(card("c-ok", '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>', "Concluído", `${recebido}<small>${pct}%</small>`));
+  host.appendChild(card("c-pend", '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>', "Pendências", String(pend)));
   host.appendChild(card("c-emp", '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>', "Empresas", String(empCompaniesShown(data).length)));
   host.appendChild(card("c-proc", '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>', "Processos (Áreas)", String(processos)));
 }
@@ -1412,7 +1412,7 @@ function empMatrix(table, data) {
 function empBars(data) {
   const host = document.getElementById("emp-bars"); if (!host) return;
   const statuses = getStatusOptions();
-  const isPend = (st) => { const k = statusClassFor(st) || "na"; return k === "pendente" || k === "analise" || k === "parcial"; };
+  const isPend = (st) => statusCategoryFor(st) === "pendencia";   // I-0015: pendência pela categoria
   const rows = empCompaniesShown(data).map((emp) => {
     const agg = data.byCompanyStatus.get(emp) || new Map();   // itens DISTINTOS por status
     let tot = 0; agg.forEach((q) => tot += q);
@@ -1527,6 +1527,12 @@ const STATUS_RAMP = {
   analise:  ["#E6F1FB", "#B5D4F4", "#85B7EB", "#042C53"],
   parcial:  ["#FAECE7", "#F5C4B3", "#F0997B", "#4A1B0C"],
   na:       ["#F1EFE8", "#D3D1C7", "#B4B2A9", "#2C2C2A"],
+  /* I-0015 — rampas das cores livres adicionais (claro → médio → texto escuro) */
+  azul:     ["#E7EEF7", "#B9CEE8", "#7FA3D2", "#0B2647"],
+  ciano:    ["#E0F0F4", "#A9D5DF", "#67B2C2", "#053842"],
+  roxo:     ["#ECE9F4", "#C9C1E2", "#9D90C9", "#241B49"],
+  rosa:     ["#F6E6EE", "#E6B9CE", "#D086A9", "#3A1023"],
+  vermelho: ["#F8E5E3", "#EEB6B2", "#E08580", "#3F0F0D"],
 };
 function rampFor(label) { return STATUS_RAMP[statusClassFor(label) || "na"] || STATUS_RAMP.na; }
 function heatTd(v, ramp, max, onClick) {
@@ -2677,7 +2683,17 @@ function openConfig() {
   openDrawer("Configuração", body);
 }
 
-const STATUS_COLORS = [["recebido", "Verde", "#2f7d4e"], ["pendente", "Amarelo", "#8a6914"], ["analise", "Azul", "#246b78"], ["parcial", "Laranja", "#b85c2e"], ["na", "Cinza", "#8a96a3"]];
+/* I-0015 — paleta de 10 cores livres (cor = só identidade visual). As 5 primeiras
+   klasses são as legadas (mantidas p/ não migrar dados/CSS); as 5 últimas são novas. */
+const STATUS_COLORS = [
+  ["recebido", "Verde", "#2f7d4e"], ["pendente", "Âmbar", "#8a6914"], ["analise", "Teal", "#246b78"],
+  ["azul", "Azul", "#2f5fa0"], ["ciano", "Ciano", "#0e7490"], ["roxo", "Roxo", "#5b4b9e"],
+  ["rosa", "Rosa", "#9d3b6b"], ["parcial", "Coral", "#b85c2e"], ["vermelho", "Vermelho", "#b3322f"],
+  ["na", "Cinza", "#64707a"],
+];
+/* I-0015 — "Status Geral" padrão herdado da cor, p/ itens sem categoria gravada */
+const DEFAULT_CAT = { recebido: "concluido", pendente: "pendencia", analise: "pendencia", parcial: "pendencia", na: "na" };
+const STATUS_CATS = [["concluido", "Concluído"], ["pendencia", "Pendência"], ["na", "N/A"]];
 /* grid de swatches visíveis (substitui o <select>): expõe .value (a klass) para o save. */
 function colorSelect(val) {
   const box = h("div", { class: "lm-swatches", role: "radiogroup", "aria-label": "Cor do status" });
@@ -2719,10 +2735,13 @@ async function openListManager() {
       const chip = h("span", { class: "chip " + (o.klass || "na") }, o.label);
       const label = h("input", { class: "input lm-label", value: o.label });
       const color = colorSelect(o.klass);
+      const cat = h("select", { class: "input lm-cat", title: "Status Geral — entra nos KPIs do dashboard (Concluído/Pendências)" },
+        ...STATUS_CATS.map(([v, t]) => h("option", { value: v }, t)));
+      cat.value = o.categoria || DEFAULT_CAT[o.klass] || "na";
       const save = h("button", { class: "btn btn-sm", onClick: async () => {
         const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
         try {
-          const saved = await store.upsertStatusOption({ id: o.id, label: nl, klass: color.value, position: o.position });
+          const saved = await store.upsertStatusOption({ id: o.id, label: nl, klass: color.value, categoria: cat.value, position: o.position });
           Object.assign(o, saved); chip.textContent = saved.label; chip.className = "chip " + (saved.klass || "na");
           await reloadStatusOptions(); refreshActiveView(); toast("Item salvo.");
         } catch (e) { toast("Erro ao salvar: " + (e.message || e), "err"); }
@@ -2732,7 +2751,11 @@ async function openListManager() {
         try { await store.deleteStatusOption(o.id); opts = opts.filter((x) => x.id !== o.id); renderItems(); await reloadStatusOptions(); refreshActiveView(); }
         catch (e) { toast("Erro ao remover: " + (e.message || e), "err"); }
       } }, "✕");
-      return h("div", { class: "lm-row" }, chip, label, color, save, del);
+      return h("div", { class: "lm-row" },
+        h("div", { class: "lm-row-top" }, chip, label, save, del),
+        h("div", { class: "lm-ctl" },
+          h("span", { class: "lm-ctl-l" }, "Cor"), color,
+          h("span", { class: "lm-ctl-l" }, "Status Geral"), cat));
     };
     const renderItems = () => {
       clear(listBox);
@@ -2741,12 +2764,12 @@ async function openListManager() {
     };
     renderItems();
     const addBtn = h("button", { class: "btn btn-primary btn-sm", onClick: async () => {
-      try { const saved = await store.upsertStatusOption({ label: "Novo item", klass: "na", position: opts.length + 1 }); opts.push(saved); renderItems(); await reloadStatusOptions(); }
+      try { const saved = await store.upsertStatusOption({ label: "Novo item", klass: "na", categoria: "na", position: opts.length + 1 }); opts.push(saved); renderItems(); await reloadStatusOptions(); }
       catch (e) { toast("Erro ao adicionar: " + (e.message || e), "err"); }
     } }, "＋ Adicionar item");
     body.appendChild(h("div", { class: "lm-card" },
       h("h4", {}, "Itens da lista"),
-      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nome e cor de cada item do dropdown de status. Vale para toda a planilha."),
+      h("p", { class: "muted", style: { margin: "0 0 10px", fontSize: "12px" } }, "Nome, cor e Status Geral de cada item do dropdown. A cor é só visual; o Status Geral (Concluído/Pendência/N/A) é o que alimenta os KPIs do dashboard. Vale para toda a planilha."),
       listBox, h("div", { style: { marginTop: "10px" } }, addBtn)));
 
     // ----- conversor (substituir) -----

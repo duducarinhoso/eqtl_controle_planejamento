@@ -77,6 +77,12 @@
   --st-na: var(--secondary);
   --st-analise: var(--status-blue);
   --st-parcial: var(--status-orange);
+  /* I-0015 — cores de status livres (paleta de 10, cor desacoplada da semântica) */
+  --st-azul: #2f5fa0;
+  --st-ciano: #0e7490;
+  --st-roxo: #5b4b9e;
+  --st-rosa: #9d3b6b;
+  --st-vermelho: #b3322f;
 
   /* ---- Tipografia ---- */
   --font-brand: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
