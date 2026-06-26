@@ -1529,23 +1529,49 @@ const STATUS_RAMP = {
   na:       ["#F1EFE8", "#D3D1C7", "#B4B2A9", "#2C2C2A"],
 };
 function rampFor(label) { return STATUS_RAMP[statusClassFor(label) || "na"] || STATUS_RAMP.na; }
-function heatTd(v, ramp, max) {
+function heatTd(v, ramp, max, onClick) {
   const cell = h("div", { class: "hcell" }, v ? String(v) : "·");
   if (v) { const ratio = v / (max || 1); const i = ratio <= 0.34 ? 0 : ratio <= 0.67 ? 1 : 2; cell.style.background = ramp[i]; cell.style.color = ramp[3]; }
   else cell.style.color = "#aab2bd";
-  return h("td", {}, cell);
+  const attrs = (v && onClick) ? { class: "u-click", title: "Ver entregas", onClick } : {};
+  return h("td", attrs, cell);
+}
+/* célula de total clicável (col/linha/geral); só clica se houver valor */
+function totTd(n, onClick) {
+  const attrs = (n && onClick) ? { class: "tot u-click", title: "Ver entregas", onClick } : { class: "tot" };
+  return h("td", attrs, String(n));
 }
 function kpi(label, val) { return h("div", { class: "u-kpi" }, h("div", { class: "l" }, label), h("div", { class: "v" }, val)); }
 
-/* P6 — modal amplo de drill por usuário: entregas (mudanças de status em células
-   do cruzamento) agrupadas por empresa → aba, expansíveis até a célula. */
-async function openUserDrill(user) {
+/* início do período selecionado (7/30 dias) ou null em "Tudo" — para o drill bater com os números da tabela */
+function usersSince() {
+  const d = App.usersPeriod === "7" ? 7 : App.usersPeriod === "30" ? 30 : null;
+  return d ? new Date(Date.now() - d * 86400000) : null;
+}
+/* lê uma CSS var do :root (cor do tema atual) */
+function cssVar(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+/* converte qualquer cor CSS (hex/nome/rgb) em rgba(...,a) via normalização do canvas */
+function colorToRgba(c, a) {
+  const cx = (colorToRgba._cx || (colorToRgba._cx = document.createElement("canvas").getContext("2d")));
+  cx.fillStyle = "#000"; cx.fillStyle = c; const s = cx.fillStyle;
+  if (s[0] === "#") { const n = parseInt(s.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+  return s.replace(/rgba?\(([^)]+)\)/, (_, p) => { const [r, g, b] = p.split(",").map((x) => x.trim()); return `rgba(${r},${g},${b},${a})`; });
+}
+
+/* P6 — modal amplo de drill de entregas (mudanças de status em células do cruzamento
+   Empresa×Status), agrupadas por empresa → aba, expansíveis até a célula.
+   ctx: { title, user?, userId?, userIds?(Set), status?, day?(YYYY-MM-DD), since?(Date) } */
+async function openDeliveriesDrill(ctx = {}) {
+  const { title = "Entregas", user = null, userId = null, userIds = null, status = null, day = null, since = null } = ctx;
   const scrim = h("div", { class: "scrim" });
   const close = () => scrim.remove();
   const bodyEl = h("div", { class: "u-drill" }, h("div", { class: "spinner", style: { margin: "40px auto" } }));
   const foot = h("div", { class: "modal-foot" }, h("button", { class: "btn btn-primary", onClick: close }, "Fechar"));
-  const head = h("div", { style: { display: "flex", alignItems: "center", gap: "10px" } }, avatarEl(user, 32), h("h3", { style: { margin: 0 } }, "Entregas de " + (user.name || "—")));
-  const modal = h("div", { class: "modal wide" }, head, bodyEl, foot);
+  const headIcon = user ? avatarEl(user, 32)
+    : status ? h("span", { class: "chip " + (statusClassFor(status) || "na") }, status)
+    : null;
+  const head = h("div", { class: "u-drill-head" }, headIcon, h("h3", { style: { margin: 0 } }, title));
+  const modal = h("div", { class: "modal wide u-drill-modal" }, head, bodyEl, foot);
   scrim.appendChild(modal);
   scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
   document.body.appendChild(scrim);
@@ -1553,14 +1579,21 @@ async function openUserDrill(user) {
   let data, changes;
   try {
     data = await getEmpData();
-    changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), { userId: user.id });
+    const opts = {};
+    if (userId) opts.userId = userId;
+    if (since) opts.since = since;
+    changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), opts);
   } catch (e) { clear(bodyEl); bodyEl.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Erro ao carregar: " + (e.message || e))); return; }
 
   const statusSet = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
+  const wantStatus = status ? normStatusLabel(status).toLowerCase() : null;
   const byEmp = new Map();   // empresa -> Map(sheetName -> {sheetId, items:[{row,col,status,changed_at}]})
   let total = 0;
   for (const ch of changes) {
     const nv = String(ch.new_value || "").trim(); if (!nv || !statusSet.has(nv.toLowerCase())) continue;
+    if (wantStatus && normStatusLabel(nv).toLowerCase() !== wantStatus) continue;
+    if (day && String(ch.changed_at).slice(0, 10) !== day) continue;
+    if (userIds && !userIds.has(ch.changed_by)) continue;
     const ci = data.cellIndex.get(ch.sheet_id + ":" + ch.row + ":" + ch.col); if (!ci) continue;
     total++;
     if (!byEmp.has(ci.empresa)) byEmp.set(ci.empresa, new Map());
@@ -1570,7 +1603,7 @@ async function openUserDrill(user) {
   }
 
   clear(bodyEl);
-  if (!total) { bodyEl.appendChild(h("p", { class: "muted", style: { padding: "24px", textAlign: "center" } }, "Sem entregas (mudanças de status em células do cruzamento) para esta pessoa.")); return; }
+  if (!total) { bodyEl.appendChild(h("p", { class: "muted", style: { padding: "24px", textAlign: "center" } }, "Sem entregas (mudanças de status em células do cruzamento) para este filtro.")); return; }
   bodyEl.appendChild(h("p", { class: "sub", style: { margin: "0 0 12px" } }, `${total} entrega(s) em ${byEmp.size} empresa(s). Expanda uma aba para ver as células e ir direto nelas.`));
 
   [...byEmp.keys()].sort((a, b) => a.localeCompare(b, "pt")).forEach((emp) => {
@@ -1593,6 +1626,11 @@ async function openUserDrill(user) {
     });
     bodyEl.appendChild(grp);
   });
+}
+
+/* wrapper compatível: cabeçalhos de linha/coluna continuam chamando openUserDrill(u) */
+function openUserDrill(user) {
+  return openDeliveriesDrill({ title: "Entregas de " + (user.name || "—"), user, userId: user.id, since: usersSince() });
 }
 
 async function renderDashUsers(body) {
@@ -1688,45 +1726,53 @@ async function renderDashUsers(body) {
     h("span", { class: "sub" }, capped ? "últimos 21 dias com atividade" : "por pessoa · dias com atividade")));
   card2.appendChild(buildDaily(users, dias, perDay, dmax));
   body.appendChild(card2);
+
+  // gráfico de entregas ao longo do tempo (todos os dias do período, não só os 21 da tabela)
+  buildDeliveryChartCard(body, users, [...daySet].sort(), perDay);
 }
 
 function buildMatrix(orient, users, statuses, count, mmax, total, rowByUser, colByStatus) {
   const wrap = h("div", { class: "u-tablewrap" });
   const table = h("table", { class: "umx" });
+  const allIds = new Set(users.map((u) => u.id));
+  const cellDrill = (u, st) => openDeliveriesDrill({ title: "Entregas de " + u.name + " · " + st, user: u, userId: u.id, status: st, since: usersSince() });
+  const userDrill = (u) => openDeliveriesDrill({ title: "Entregas de " + u.name, user: u, userId: u.id, since: usersSince() });
+  const statusDrill = (st) => openDeliveriesDrill({ title: "Entregas · " + st, status: st, userIds: allIds, since: usersSince() });
+  const allDrill = () => openDeliveriesDrill({ title: "Todas as entregas", userIds: allIds, since: usersSince() });
   if (orient === "su") {
     const head = h("tr", {}, h("th", { class: "rh" }, "Status"));
-    users.forEach((u) => head.appendChild(h("th", { class: "u-click u-col", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-col-nm" }, u.name))));
+    users.forEach((u) => head.appendChild(h("th", { class: "u-click u-col", title: "Ver entregas de " + u.name, onClick: () => userDrill(u) }, avatarEl(u, 24), h("span", { class: "u-col-nm" }, u.name))));
     head.appendChild(h("th", {}, "Total"));
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
     statuses.forEach((st) => {
       const ramp = rampFor(st);
       const tr = h("tr", {}, h("td", { class: "rh" }, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st)));
-      users.forEach((u) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, ramp, mmax)));
-      tr.appendChild(h("td", { class: "tot" }, String(colByStatus(st))));
+      users.forEach((u) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, ramp, mmax, () => cellDrill(u, st))));
+      tr.appendChild(totTd(colByStatus(st), () => statusDrill(st)));
       tb.appendChild(tr);
     });
     table.appendChild(tb);
     const tf = h("tr", {}, h("td", { class: "rh" }, "Total"));
-    users.forEach((u) => tf.appendChild(h("td", { class: "tot" }, String(rowByUser(u.id)))));
-    tf.appendChild(h("td", { class: "tot" }, String(total)));
+    users.forEach((u) => tf.appendChild(totTd(rowByUser(u.id), () => userDrill(u))));
+    tf.appendChild(totTd(total, allDrill));
     table.appendChild(h("tfoot", {}, tf));
   } else {
     const head = h("tr", {}, h("th", { class: "rh" }, "Pessoa"));
-    statuses.forEach((st) => head.appendChild(h("th", {}, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st))));
+    statuses.forEach((st) => head.appendChild(h("th", { class: "u-click", title: "Ver entregas · " + st, onClick: () => statusDrill(st) }, h("span", { class: "chip " + (statusClassFor(st) || "na") }, st))));
     head.appendChild(h("th", {}, "Total"));
     table.appendChild(h("thead", {}, head));
     const tb = h("tbody", {});
     users.forEach((u) => {
-      const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
-      statuses.forEach((st) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, rampFor(st), mmax)));
-      tr.appendChild(h("td", { class: "tot" }, String(rowByUser(u.id))));
+      const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => userDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+      statuses.forEach((st) => tr.appendChild(heatTd((count[u.id] || {})[st] || 0, rampFor(st), mmax, () => cellDrill(u, st))));
+      tr.appendChild(totTd(rowByUser(u.id), () => userDrill(u)));
       tb.appendChild(tr);
     });
     table.appendChild(tb);
     const tf = h("tr", {}, h("td", { class: "rh" }, "Total"));
-    statuses.forEach((st) => tf.appendChild(h("td", { class: "tot" }, String(colByStatus(st)))));
-    tf.appendChild(h("td", { class: "tot" }, String(total)));
+    statuses.forEach((st) => tf.appendChild(totTd(colByStatus(st), () => statusDrill(st))));
+    tf.appendChild(totTd(total, allDrill));
     table.appendChild(h("tfoot", {}, tf));
   }
   wrap.appendChild(table);
@@ -1737,27 +1783,106 @@ function buildDaily(users, dias, perDay, dmax) {
   const wrap = h("div", { class: "u-tablewrap" });
   const table = h("table", { class: "umx" });
   const ramp = STATUS_RAMP.recebido;
+  const allIds = new Set(users.map((u) => u.id));
   const fmtDay = (iso) => { const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] : iso; };
+  const userDrill = (u) => openDeliveriesDrill({ title: "Entregas de " + u.name, user: u, userId: u.id, since: usersSince() });
+  const dayDrill = (d) => openDeliveriesDrill({ title: "Entregas · " + fmtDay(d), day: d, userIds: allIds, since: usersSince() });
+  const cellDrill = (u, d) => openDeliveriesDrill({ title: "Entregas de " + u.name + " · " + fmtDay(d), user: u, userId: u.id, day: d, since: usersSince() });
   const head = h("tr", {}, h("th", { class: "rh" }, "Pessoa"));
-  dias.forEach((d) => head.appendChild(h("th", {}, fmtDay(d))));
+  dias.forEach((d) => head.appendChild(h("th", { class: "u-click", title: "Ver entregas · " + fmtDay(d), onClick: () => dayDrill(d) }, fmtDay(d))));
   head.appendChild(h("th", {}, "Total"));
   table.appendChild(h("thead", {}, head));
   const tb = h("tbody", {});
   users.forEach((u) => {
-    const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => openUserDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
+    const tr = h("tr", {}, h("td", { class: "rh u-click", title: "Ver entregas de " + u.name, onClick: () => userDrill(u) }, avatarEl(u, 24), h("span", { class: "u-nm" }, u.name)));
     let t = 0;
-    dias.forEach((d) => { const v = (perDay[u.id] || {})[d] || 0; t += v; tr.appendChild(heatTd(v, ramp, dmax)); });
-    tr.appendChild(h("td", { class: "tot" }, String(t)));
+    dias.forEach((d) => { const v = (perDay[u.id] || {})[d] || 0; t += v; tr.appendChild(heatTd(v, ramp, dmax, () => cellDrill(u, d))); });
+    tr.appendChild(totTd(t, () => userDrill(u)));
     tb.appendChild(tr);
   });
   table.appendChild(tb);
   const tf = h("tr", {}, h("td", { class: "rh" }, "Total/dia"));
   let gt = 0;
-  dias.forEach((d) => { let c = 0; users.forEach((u) => { c += (perDay[u.id] || {})[d] || 0; }); gt += c; tf.appendChild(h("td", { class: "tot" }, String(c))); });
-  tf.appendChild(h("td", { class: "tot" }, String(gt)));
+  dias.forEach((d) => { let c = 0; users.forEach((u) => { c += (perDay[u.id] || {})[d] || 0; }); gt += c; tf.appendChild(totTd(c, () => dayDrill(d))); });
+  tf.appendChild(totTd(gt, () => openDeliveriesDrill({ title: "Todas as entregas", userIds: allIds, since: usersSince() })));
   table.appendChild(h("tfoot", {}, tf));
   wrap.appendChild(table);
   return wrap;
+}
+
+/* card do gráfico: itens entregues por dia, UMA linha por pessoa (cor da pessoa),
+   tags rosto+nome que ligam/desligam só a linha, total tênue no cabeçalho.
+   `days` = todos os dias com atividade no período (sem o cap de 21 da tabela). */
+function buildDeliveryChartCard(container, users, days, perDay) {
+  if (App._deliveryChart) { try { App._deliveryChart.destroy(); } catch (_) {} App._deliveryChart = null; }
+  const card = h("div", { class: "u-card" });
+  const totalNode = h("span", { class: "v" }, "0");
+  card.appendChild(h("div", { class: "u-chart-head" },
+    h("div", {}, h("h3", {}, "Entregas ao longo do tempo"),
+      h("span", { class: "sub" }, "itens entregues por dia · uma linha por pessoa")),
+    h("div", { class: "u-chart-total" }, totalNode, h("span", { class: "l" }, "no período"))));
+  const canvas = h("canvas");
+  card.appendChild(h("div", { class: "u-chart-wrap" }, canvas));
+  const tagsRow = h("div", { class: "u-chart-tags" });
+  card.appendChild(tagsRow);
+  container.appendChild(card);
+
+  if (typeof Chart === "undefined" || !days.length) {
+    card.appendChild(h("p", { class: "muted", style: { padding: "0 16px 16px" } }, "Sem dados para o gráfico."));
+    return;
+  }
+
+  const fmtDay = (iso) => { const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] : iso; };
+  const labels = days.map(fmtDay);
+  const colorOf = (u) => u.color || colorFromString(u.id || u.name);
+  const userTotal = (u) => days.reduce((s, d) => s + ((perDay[u.id] || {})[d] || 0), 0);
+  const visible = new Set(users.map((u) => u.id));   // todos visíveis por padrão
+
+  const updateTotal = () => { let t = 0; users.forEach((u) => { if (visible.has(u.id)) t += userTotal(u); }); totalNode.textContent = String(t); };
+
+  let chart;
+  const draw = () => {
+    if (chart) { try { chart.destroy(); } catch (_) {} }
+    const grid = cssVar("--grid-line") || "rgba(128,128,128,.15)";
+    const txt = cssVar("--text-dim") || "#94a3b8";
+    const areaFill = (color) => (cx) => {
+      const { ctx: c, chartArea } = cx.chart; if (!chartArea) return colorToRgba(color, .2);
+      const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, colorToRgba(color, .22)); g.addColorStop(1, colorToRgba(color, 0)); return g;
+    };
+    chart = new Chart(canvas, {
+      type: "line",
+      data: { labels, datasets: users.map((u) => { const col = colorOf(u); return {
+        label: u.name, data: days.map((d) => (perDay[u.id] || {})[d] || 0),
+        borderColor: col, backgroundColor: areaFill(col), fill: true, tension: .45, pointRadius: 0, borderWidth: 2,
+        hidden: !visible.has(u.id) }; }) },
+      options: { responsive: true, maintainAspectRatio: false,
+        animation: false,   // paint determinístico: evita gráfico em branco ao reconstruir (troca de tema/re-render) quando o rAF é estrangulado
+        plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } },
+        interaction: { mode: "index", intersect: false },
+        scales: {
+          y: { beginAtZero: true, grid: { color: grid }, border: { display: false }, ticks: { color: txt, precision: 0 } },
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: txt, maxRotation: 0, autoSkip: true } } } }
+    });
+    App._deliveryChart = chart;
+  };
+  draw();
+  updateTotal();
+
+  users.forEach((u, i) => {
+    const chip = h("button", { class: "dchip", title: "Mostrar/ocultar " + u.name, onClick: () => {
+      if (visible.has(u.id)) visible.delete(u.id); else visible.add(u.id);
+      chip.classList.toggle("off", !visible.has(u.id));
+      chart.setDatasetVisibility(i, visible.has(u.id));
+      chart.update();
+      updateTotal();
+    } }, avatarEl(u, 20), h("span", {}, u.name));
+    tagsRow.appendChild(chip);
+  });
+
+  // re-tema: reconstrói o gráfico com as cores do tema atual; solta o observer quando o canvas sai da tela
+  const obs = new MutationObserver(() => { if (!canvas.isConnected) { obs.disconnect(); return; } draw(); });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 }
 
 /* ============================ SELECT SHEET ============================ */
