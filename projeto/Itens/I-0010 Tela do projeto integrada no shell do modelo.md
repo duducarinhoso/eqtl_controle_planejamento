@@ -1,7 +1,8 @@
 ---
 id: I-0010
 titulo: Tela do projeto integrada no shell do modelo (dashboard + abas + grade)
-status: aberto
+status: resolvido
+resolvido: 2026-06-25
 prioridade: P1
 frente: Design / Shell
 origem: "chat 2026-06-24"
@@ -36,3 +37,6 @@ Ao clicar num projeto (hoje `#/p/<id>`), **permanecer no shell do modelo** (side
 
 ## Critério de conclusão
 Abrir um projeto mantém o shell do modelo; dashboard e abas no estilo do modelo (claro+escuro), grade funcionando no `.content` (edição/zoom/teclado ok); sem erros; verificado no browser. A grade legada `.lg-*` pode então ser aposentada (parte de [[I-0012 Re-tematizar a grade (planilha) ao DS v2]]).
+
+## Desfecho (2026-06-25) — RESOLVIDO
+Implementado e **publicado em produção** (`main`/GitHub Pages). `mountProject` monta o module shell (Operações ativo) + `buildProjectRail()` (rail de contexto, reusa `#nav-dashboard`/`#nav-solic`/`#sheet-list`/`#exp-bar`) + `buildProjectPane()` (`.proj-main`: `.proj-head`/`#crumb`/`#presence`/recolher + `.toolbar` + `#grid-scroll` + `.statusbar`). Decisão das abas = **rail de contexto** (não tabs). `applyRoute` guard → `.proj-shell`. CSS two-pane em `app-ds.css`. A grade foi só **re-hospedada** (re-tematização das células = [[I-0012 Re-tematizar a grade (planilha) ao DS v2]], segue aberta). Detalhe: [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]].

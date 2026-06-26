@@ -500,3 +500,40 @@ table.umx th.u-col .u-col-nm{ display:block; max-width:78px; margin:0 auto; font
    ===================================================================== */
 .proj-main #grid-scroll:not(.dash):not(.solic){ background:var(--workspace-bg); color:var(--on-surface); }
 .proj-main table.grid td.cell .cc{ color:var(--on-surface); }
+
+/* presença (usuários online) na faixa do projeto: o nome usava --on-surface-variant
+   (fixo escuro) e sumia no header escuro do DS v2 → token theme-aware. */
+.proj-head .pav-name{ color:var(--text-muted); }
+
+/* =====================================================================
+   DARK MODE dos drawers/modais/menus legados (Configuração, Busca geral,
+   Histórico, Comentários, Equipe, Admin, e os managers de Status/Empresas/
+   Áreas). Eles usam tokens legados FIXOS claros (--on-surface, --surface-*,
+   --outline-*) que sumiam no escuro. Aqui remapeamos esses tokens para os
+   do DS v2 SÓ dentro desses contêineres → tudo lá dentro herda o tema.
+   Não afeta a GRADE (que vive em .proj-main, fora destes contêineres).
+   ===================================================================== */
+[data-theme="dark"] .drawer,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .ctx-menu{
+  --on-surface:var(--text);
+  --on-surface-variant:var(--text-muted);
+  --outline-variant:var(--border);
+  --outline:var(--text-dim);
+  --surface-container-lowest:var(--input-bg);
+  --surface-container-low:var(--hover);
+  --surface-container:var(--hover);
+  --surface-container-high:var(--divider);
+  --secondary-container:color-mix(in srgb, var(--blue) 24%, transparent);
+  --primary-container:var(--blue);
+  --primary:var(--green);
+}
+[data-theme="dark"] .drawer{ background:var(--card-bg); color:var(--text); border-left:1px solid var(--border); }
+
+/* picker de cor do status: grid de swatches visíveis (substitui o <select>) */
+.lm-swatches{ display:flex; flex-wrap:wrap; gap:6px; flex:0 0 auto; align-items:center; }
+.lm-row .lm-swatches{ max-width:200px; }
+.lm-sw{ width:24px; height:24px; border-radius:6px; border:0; cursor:pointer; padding:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.18); transition:transform .1s ease; }
+.lm-sw:hover{ transform:scale(1.08); }
+.lm-sw.on{ box-shadow:0 0 0 2px var(--card-bg), 0 0 0 4px var(--blue); }
+.lm-sw:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }

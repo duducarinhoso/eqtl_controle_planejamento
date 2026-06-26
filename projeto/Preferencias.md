@@ -20,6 +20,7 @@ tipo: preferencias
 - **Usar exatamente os HTMLs de `modelos/`, não recriar do zero.** Quando o Eduardo aponta um modelo (`design-system_v2.html`, `00,tela_login.html`, `01.tela_inicial_v2.html`), usar **o conteúdo dele** como fonte — não a paráfrase nem a minha interpretação. — *origem: auto-memory `usar-modelos-do-usuario`*
 - **Quando o Eduardo manda um arquivo como fonte (PDF/xlsx/print/HTML), LER o arquivo e executar com base nele.** Seguir à risca (ordem, nomes, o que aparece); não cortar itens nem adicionar os que não estão lá.
 - **Ajustes de UI literais — não inventar elementos.** Ao pedir um ajuste (redimensionar, mover, recolorir), fazer **só aquilo**; não adicionar cards/seções "pra aproveitar o espaço".
+- **A grade (planilha) é o espelho do Excel — não mexer na estrutura nem nas cores dela.** Correções de tema devem **isolar a grade** (ela renderiza sempre clara: fundo branco, texto escuro), e a **formatação POR CÉLULA do usuário é sagrada** (cores inline sempre vencem). — *origem: chat 2026-06-25 (fix do texto das células ficando branco no dark); ver [[D-0008 Grade isolada do tema e drawers theme-aware (dark)]]*
 - **Identidade institucional, sóbria e confiável** (PRODUCT.md). Anti-referência: SaaS genérico colorido/lúdico, glassmorphism decorativo espalhado, dashboards hero-metric. A ferramenta some na tarefa: densidade e clareza acima de espetáculo.
 
 ### Disciplina de revisão de design (aplicar AUTOMÁTICO em toda mudança de UI) — *origem: revisão DS v2, 2026-06-24*

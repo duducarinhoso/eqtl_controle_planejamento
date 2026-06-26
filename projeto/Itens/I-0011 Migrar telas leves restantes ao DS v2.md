@@ -17,3 +17,9 @@ Telas que ainda estão no estilo legado e têm equivalente direto no modelo (Eta
 - **Modais** restantes (novo/editar projeto, etc.): já herdam `.modal` tematizado; revisar caso a caso.
 
 **Consultar:** modelo (`.tbl` linhas ~438-447, `.badge` ~382-393, `.stat` ~316-328) e o checklist Definition of Done (Central § Painel de Design). Aplicar a disciplina de revisão (cor semântica, ícone↔rótulo, WCAG claro+escuro).
+
+## Progresso (2026-06-25)
+- **Dashboards** (Status/Usuários/Empresas) migrados no overhaul (P1–P6) — ver [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]].
+- **Drawers/modais/menus** (Config, Busca geral, Histórico, Comentários, Equipe, Admin, managers de Status/Empresas/Áreas) ficaram **legíveis no dark** via remap de tokens ([[D-0008 Grade isolada do tema e drawers theme-aware (dark)]]).
+- **Gerenciar lista de status:** picker de cor virou **grid de swatches**; falta o redesenho estrutural completo e o recurso de cor+categoria ([[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]]).
+- **Admin → Usuários** ainda no estilo legado (segue aberto).

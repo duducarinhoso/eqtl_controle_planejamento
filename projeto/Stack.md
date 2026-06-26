@@ -65,6 +65,8 @@ projeto/                ← esta Central do Projeto (plano + checkpoints)
 ### RPCs usadas
 `insert_row` · `delete_row` · `insert_col` · `delete_col` (operações atômicas de linha/coluna) · `project_status_summary` · `user_status_activity` · `import_cells` · `ey_sync` · `ey_sync_documents` · `ey_sync_engagements`
 
+> **Deltas 2026-06-25:** `companies.aliases text[]` (De-Para de empresas; rodar `sql/18_company_aliases.sql`) · `status_options.categoria` **planejado** (`sql/19`, ver [[I-0015 ...]]) · `store.loadStatusChanges(sheetIds, opts)` — lê `cell_history` do projeto para o medidor de Usuários restrito ao cruzamento `parseAbas`. O dashboard cruza Empresa×Status pelo `parser.js` (`parseAbas`/`computeEmpresaAreaData`), com cache `getEmpData`.
+
 ### Realtime (canais)
 `db:sheet:{id}` (postgres_changes em cells/sheets/comments) · `presence:sheet:{id}` (quem edita qual célula) · `presence:app` (online global) · `db:online_status` (heartbeat)
 

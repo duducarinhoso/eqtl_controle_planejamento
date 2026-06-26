@@ -2156,6 +2156,29 @@ function openEyImport() {
 /* ============================ EXPORTAR EXCEL ============================ */
 function safeFile(n) { return String(n).replace(/[\\/?*:"<>|]/g, "_").trim() || "planilha"; }
 
+/* cor da célula de status no Excel: lê a cor REAL do chip (.chip.<klass>) exibido,
+   então o export reflete exatamente o que a aba mostra (e segue qualquer mudança de cor). */
+const _statusFillCache = new Map();
+function rgbToHex(rgb) {
+  const m = String(rgb || "").match(/\d+(?:\.\d+)?/g);
+  if (!m || m.length < 3) return null;
+  if (m.length >= 4 && parseFloat(m[3]) === 0) return null;   // transparente → sem cor
+  const h2 = (n) => Math.round(+n).toString(16).padStart(2, "0");
+  return "#" + h2(m[0]) + h2(m[1]) + h2(m[2]);
+}
+function statusFillFor(value) {
+  const v = String(value ?? "").trim(); if (!v) return null;
+  const klass = statusClassFor(v) || "na";
+  if (_statusFillCache.has(klass)) return _statusFillCache.get(klass);
+  const el = h("span", { class: "chip " + klass, style: { position: "absolute", visibility: "hidden", left: "-9999px" } }, v);
+  document.body.appendChild(el);
+  const cs = getComputedStyle(el);
+  const res = { fg: rgbToHex(cs.color), bg: rgbToHex(cs.backgroundColor) };
+  el.remove();
+  _statusFillCache.set(klass, res);
+  return res;
+}
+
 async function exportCurrentSheet() {
   if (!App.sheet) return;
   toast("Gerando Excel…");
@@ -2163,7 +2186,7 @@ async function exportCurrentSheet() {
     await excel.exportToXlsx([{
       name: App.sheet.name, col_widths: App.sheet.col_widths, col_count: App.sheet.col_count,
       cells: [...App.grid.cells.values()],
-    }], safeFile(App.sheet.name) + ".xlsx");
+    }], safeFile(App.sheet.name) + ".xlsx", statusFillFor);
   } catch (e) { toast("Erro ao exportar: " + e.message, "err"); }
 }
 
@@ -2175,7 +2198,7 @@ async function exportWorkbook() {
       const cells = await store.loadCells(s.id);
       sheetsData.push({ name: s.name, col_widths: s.col_widths, col_count: s.col_count, cells });
     }
-    await excel.exportToXlsx(sheetsData, "Controle de Solicitações.xlsx");
+    await excel.exportToXlsx(sheetsData, "Controle de Solicitações.xlsx", statusFillFor);
     toast("Exportado.");
   } catch (e) { toast("Erro ao exportar: " + e.message, "err"); }
 }
@@ -2221,7 +2244,7 @@ async function confirmExport() {
       const cells = await store.loadCells(s.id);
       sheetsData.push({ name: s.name, col_widths: s.col_widths, col_count: s.col_count, cells });
     }
-    await excel.exportToXlsx(sheetsData, chosen.length === 1 ? safeFile(chosen[0].name) + ".xlsx" : "Controle de Solicitações.xlsx");
+    await excel.exportToXlsx(sheetsData, chosen.length === 1 ? safeFile(chosen[0].name) + ".xlsx" : "Controle de Solicitações.xlsx", statusFillFor);
     toast(`Exportado (${chosen.length} aba(s)).`);
   } catch (e) { toast("Erro ao exportar: " + e.message, "err"); }
   exitExportMode();
@@ -2529,11 +2552,19 @@ function openConfig() {
   openDrawer("Configuração", body);
 }
 
-const STATUS_COLORS = [["recebido", "Verde"], ["pendente", "Amarelo"], ["analise", "Azul"], ["parcial", "Laranja"], ["na", "Cinza"]];
+const STATUS_COLORS = [["recebido", "Verde", "#2f7d4e"], ["pendente", "Amarelo", "#8a6914"], ["analise", "Azul", "#246b78"], ["parcial", "Laranja", "#b85c2e"], ["na", "Cinza", "#8a96a3"]];
+/* grid de swatches visíveis (substitui o <select>): expõe .value (a klass) para o save. */
 function colorSelect(val) {
-  const sel = h("select", { class: "input lm-color" }, ...STATUS_COLORS.map(([k, l]) => h("option", { value: k }, l)));
-  sel.value = val || "na";
-  return sel;
+  const box = h("div", { class: "lm-swatches", role: "radiogroup", "aria-label": "Cor do status" });
+  let current = val || "na";
+  box.value = current;
+  STATUS_COLORS.forEach(([k, label, hex]) => {
+    const sw = h("button", { type: "button", class: "lm-sw" + (k === current ? " on" : ""), title: label, "aria-label": label, style: { background: hex } });
+    sw.dataset.k = k;
+    sw.addEventListener("click", () => { current = k; box.value = k; box.querySelectorAll(".lm-sw").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); });
+    box.appendChild(sw);
+  });
+  return box;
 }
 /* re-renderiza a tela atual para refletir mudanças na lista (cores/itens) */
 function refreshActiveView() {

@@ -225,8 +225,9 @@ function buildThemePalette(wb) {
   } catch (_) { return null; }
 }
 
-/* Exporta para .xlsx. sheetsData: [{ name, col_widths, col_count, cells:[record] }] */
-export async function exportToXlsx(sheetsData, filename) {
+/* Exporta para .xlsx. sheetsData: [{ name, col_widths, col_count, cells:[record] }].
+   statusFill(value) -> {fg,bg}|null: cor exibida do status (chip), p/ refletir no Excel. */
+export async function exportToXlsx(sheetsData, filename, statusFill) {
   const ExcelJS = await getExcelJS();
   const wb = new ExcelJS.Workbook();
   wb.creator = "Controle de Solicitações";
@@ -242,14 +243,18 @@ export async function exportToXlsx(sheetsData, filename) {
       const cell = ws.getCell(rec.row, rec.col);
       cell.value = coerce(rec.value);
       const f = rec.format || {};
+      // célula de status: a cor exibida vem do CHIP (klass), não do format salvo
+      const sc = (rec.data_type === "status" && typeof statusFill === "function") ? statusFill(rec.value) : null;
       const font = {};
       if (f.bold) font.bold = true;
       if (f.italic) font.italic = true;
       if (f.underline) font.underline = true;
-      if (f.color) font.color = { argb: toARGB(f.color) };
+      if (sc && sc.fg) font.color = { argb: toARGB(sc.fg) };
+      else if (f.color) font.color = { argb: toARGB(f.color) };
       if (f.fontSize) font.size = f.fontSize;
       if (Object.keys(font).length) cell.font = font;
-      if (f.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: toARGB(f.bg) } };
+      if (sc) { if (sc.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: toARGB(sc.bg) } }; }   // status sem fill (ex.: N/A) → sem fill
+      else if (f.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: toARGB(f.bg) } };
       if (f.border) {
         const bc = { argb: f.border.c ? toARGB(f.border.c) : "FF000000" };
         const bd = {};

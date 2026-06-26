@@ -24,5 +24,10 @@ _Report Gerencial/
 # tools/: material de integracao EY com infra interna (hosts/tenant/client_id/escopos de token). Repo e publico e o app NAO usa tools/ → manter LOCAL.
 tools/
 
+# Arquivos temporarios do Office (lock files ~$...)
+~$*
+# Comunicados internos (Teams etc.): repo e publico → manter LOCAL
+modelos/arquivos/*.pptx
+
 # Dependências (não usamos, mas por segurança)
 node_modules/

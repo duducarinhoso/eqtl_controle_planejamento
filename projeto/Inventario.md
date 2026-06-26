@@ -1,5 +1,5 @@
 ---
-data_atualizacao: 2026-06-24
+data_atualizacao: 2026-06-25
 tipo: inventario
 ---
 
@@ -15,10 +15,11 @@ tipo: inventario
 | **Troca de senha no 1º acesso** | `app.js` (`forceChangePassword`) — `must_change_password` | ✅ concluída |
 | **Home / Seletor de módulos** | `app.js` (`showHome`/`buildHome`) + `styles/home.css` | 🔨 entregue — painel **Auditoria** ativo (→ `#/projetos`) + **Cronograma** inativo (`aria-disabled`, "em construção") |
 | **Projetos (landing)** | `app.js` (`showProjects`/`buildLanding`/`projectCard`) | ✅ concluída — grade de cards, busca, criar/editar/excluir, chips de status por contagem |
-| **Workspace da grade** | `app.js` (`buildShell`) + `js/grid.js` + `styles/app.css` | ✅ concluída — sidebar (abas + busca + filtro), topbar (breadcrumb área/SCOT + presença), toolbar (formatação), statusbar (zoom, RT, seleção) |
+| **Workspace do projeto** | `app.js` (`buildProjectPane`/`buildProjectRail`) + `js/grid.js` + `styles/app-ds.css` | ✅ migrado ao **shell DS v2** (2026-06-25): rail de contexto + dashboard + Solicitações + grade no `.content`; grade re-hospedada (células = I-0012). `buildShell` legado órfão (T6) |
 | **Grade (planilha)** | `js/grid.js` (`class Grid`) | ✅ concluída — edição, undo/redo (200), copy/paste, merge, auto-fit, resize, status semafórico, comentários, presença |
-| **Dashboard — aba Status** | `app.js` (`renderDashStatus`) | ✅ concluída — heatmap status×grupo + medidor de entregas (donut) + KPIs |
-| **Dashboard — aba Usuários** | `app.js` (`renderDashUsers`) | ✅ concluída — matriz usuário×status + gráfico de atividade diária (RPC `user_status_activity`) |
+| **Dashboard — aba Empresas** (1ª/default) | `app.js` (`renderDashEmpresa` + `computeEmpresaAreaData`/`getEmpData`) | ✅ matriz Empresa×Processo (Total congelado, cabeçalho 2 linhas, linha de total) + filtro por empresa + barras; **números por itens distintos** (D-0006); cruzamento `parseAbas` |
+| **Dashboard — aba Abas** (ex-"Visão por status") | `app.js` (`renderDashStatus`) | ✅ KPIs por status com drill por aba; conta pelo **cruzamento** `parseAbas` (não mais `loadStatusAggregate`) |
+| **Dashboard — aba Usuários** | `app.js` (`renderDashUsers` + `openUserDrill`) | ✅ medidor restrito ao cruzamento (`cell_history` ∩ células válidas via `store.loadStatusChanges`, fallback RPC) + **modal de drill** empresa→aba→célula |
 | **Admin — Usuários** | `app.js` (`openAdminPanel`) + `store.js` | ✅ concluída — listar/criar/editar/reset/avatar/role + allowlist de e-mails |
 | **Perfil / menu do usuário** | `app.js` (`openUserMenu`, `changeMyPhoto`) | ✅ concluída — foto, gerenciar lista de status, sair |
 | **Gerenciar lista de status** | `app.js` (`openStatusManager`) + `store.js` (`status_options`) | ✅ concluída — CRUD da lista semafórica configurável |

@@ -13,6 +13,7 @@ tipo: hub-projeto
 
 ## 🟢 Onde estamos agora
 
+- **🟢 EM PRODUÇÃO — tela do projeto no shell DS v2 + overhaul do dashboard + De-Para + fixes dark (2026-06-25):** abrir um projeto agora **vive no shell DS v2** (rail de contexto + dashboard + Solicitações + grade), com **Dashboard como 1ª tela** ([[I-0010 Tela do projeto integrada no shell do modelo]] ✅). Dashboard reorganizado: tabs **Empresas · Abas · Usuários**; tab Empresas com matriz Empresa×Processo (coluna Total congelada, cabeçalho 2 linhas, linha de total) + **filtro por empresa**; **modal de drill por usuário**; **números por itens distintos** ([[D-0006 Numeros do dashboard contam itens distintos]]); paleta de status **sóbria**. **De-Para de empresas** (grafias→canônico, [[D-0007 De-Para de empresas (grafias-aliases)]]). **Fixes de modo escuro** (grade = espelho do Excel **sempre clara**; drawers/modais/menus theme-aware via remap de tokens — [[D-0008 Grade isolada do tema e drawers theme-aware (dark)]]). **Export Excel** passou a refletir a cor do status. Publicado no `main`/GitHub Pages (commits `90c884d`/`740a87f`/`dae40b4`). Detalhe: [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]]. ⚠️ **Pendente de publicar** (verificado, não commitado): presença dark · config/drawers dark · grid de swatches · export-color. ⚠️ **SQL a rodar no Supabase:** `sql/18_company_aliases.sql` (De-Para).
 - **🆕 Migração para o Design System v2 — shell, sidebar e Projetos (2026-06-24):** o app começou a "mudar para a casa nova" (`modelos/design-system_v2.html`). Trazidos o CSS (`styles/design-system.css`) e o JS (`js/ds.js`) **verbatim** do modelo; **shell + sidebar + tela Projetos** agora no modelo (claro+escuro): 3 módulos (Portal EY / Operações / Administração), tema com toggle, marca (mascote ↔ logo) e conta consolidada na sidebar. Rodado o **painel de design com cross-review** → paleta de status semântica/distinta, contraste WCAG AA, ícones coerentes. Criada a **disciplina de revisão automática** (checklist Definition of Done em § 🎨 Painel de Design). Grade segue legada (escopada `.lg-*`, migra por último). Detalhe: [[E-2026-06-24 Migracao DS v2 (shell, sidebar, Projetos)]] · decisões [[D-0004 Migracao 100% para o DS v2 (casa nova)]] / [[D-0005 Navegacao em 3 modulos e tela do projeto integrada]].
 - **🆕 Painel de skills de design instalado (2026-06-24):** vendorizadas em `.claude/skills/` as skills `impeccable`, `redesign-existing-projects` e `dudu-check-cores` (versionadas → portáveis via git) para agir como **painel de revisão** de visual/estrutura. Roteamento por contexto + protocolo de painel na seção **🎨 Painel de Design** abaixo.
 - **🆕 EY: relatório como fonte única + schema incremental + userscript (2026-06-24):** `ey_engagements` **criada e populada** (2 engagements reais); descoberto o `reports.json` (baixa o relatório **em memória, sem diálogo "Salvar como"**); banco **re-arquitetado p/ o relatório como fonte**, chave `engagement|#|grupo`, com RPCs `ey_sync`/`ey_sync_documents`/`ey_sync_engagements` validadas + log de mudanças e de execuções (quem/quando/o quê); `tools/ey_api.js` (`fetchReportBlob`/`parseReport`) e `tools/ey_userscript.user.js` prontos. **Ainda sem coletar solicitações/documentos** (`ey_requests`=0) — o Eduardo vai montar a UI + botão "Executar" e fazer a 1ª coleta. Detalhe: [[E-2026-06-24 EY relatorio-fonte, schema incremental e userscript]] · decisão [[D-0003 Relatorio EY como fonte unica e chave composta]].
@@ -37,12 +38,12 @@ tipo: hub-projeto
 ## 🎯 Próximos passos imediatos
 
 > [!important] ▶️ COMEÇAR AQUI
-> **2026-06-24 — DS v2: próximo é a TELA DO PROJETO INTEGRADA.** Shell, sidebar e tela Projetos já estão no modelo. Próximo passo: **[[I-0010 Tela do projeto integrada no shell do modelo]]** — ao abrir um projeto, **permanecer no shell do modelo** (dashboard em cards `.stat`/`.card` + abas como nav contextual + a **grade/tabela do Excel no `.content`, mantida**), sem abrir tela nova. **Alinhar com o Eduardo, antes de codar,** o layout das abas (tabs no topo vs sub-lista lateral). A cada ajuste, rodar o checklist **Definition of Done** (§ 🎨 Painel de Design): consultar o modelo, revisão holística, cor semântica, ícone↔rótulo, WCAG claro+escuro, cross-review. O **passo-a-passo e o que consultar** estão no próprio item I-0010. Pendência paralela: **commitar/`push`** ([[I-0007 Trabalho em andamento sem commit (home login EY DS v2)]]); EY (I-0002/I-0009) **pausado**.
+> **2026-06-25 — próximo: CONFIRMAR e implementar CORES + "STATUS GERAL".** O Eduardo pediu **cores de status livres (10, num grid de swatches)** + um campo novo **"Status Geral"** (Concluído / Pendência / N/A) por item, **desacoplando cor de semântica** — a proposta visual já foi mostrada no chat. **Aguardando o "confirma" dele do desenho** → [[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]]. Ao confirmar: `sql/19` (`status_options.categoria`), editor (swatches de 10 + dropdown "Status Geral"), dashboard somando os KPIs por `categoria`, migração herdando da cor atual. **Em paralelo / antes:** (1) **publicar a leva pendente** (presença + config/drawers dark + swatches + export-color → cache-bust `v18→v19`, commit + push no `main`); (2) **rodar `sql/18_company_aliases.sql`** no Supabase (De-Para). Dívida: **T6 — aposentar o shell legado `.lg-*`**.
 
 ### Itens abertos (mapa do plano de ajustes)
 | Item | Prioridade | Frente |
 |---|---|---|
-| [[I-0010 Tela do projeto integrada no shell do modelo]] | P1 | Design/Shell ◀ próximo |
+| [[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]] | P1 | Dashboard ◀ próximo (aguarda confirma) |
 | [[I-0007 Trabalho em andamento sem commit (home login EY DS v2)]] | P1 | commit/push |
 | [[I-0011 Migrar telas leves restantes ao DS v2]] | P2 | Design |
 | [[I-0012 Re-tematizar a grade (planilha) ao DS v2]] | P2 | Design/Grade |
@@ -54,7 +55,8 @@ tipo: hub-projeto
 | [[I-0006 Definir escopo do modulo Cronograma]] | P3 | Cronograma |
 | [[I-0008 Render de linhas-colunas congeladas na grade]] | P3 | dívida técnica |
 
-> Resolvidos nesta sessão (2026-06-24): [[I-0001 Criar tabela ey_engagements no Supabase]], [[I-0003 Filtro de extracao EY captura so 174 de 253 solicitacoes]], [[I-0004 Bridge Tampermonkey para coleta automatica EY]].
+> Resolvidos em 2026-06-24: [[I-0001 Criar tabela ey_engagements no Supabase]], [[I-0003 Filtro de extracao EY captura so 174 de 253 solicitacoes]], [[I-0004 Bridge Tampermonkey para coleta automatica EY]].
+> Resolvidos em 2026-06-25: [[I-0010 Tela do projeto integrada no shell do modelo]] (em produção). Avançados (seguem abertos): [[I-0011 Migrar telas leves restantes ao DS v2]], [[I-0012 Re-tematizar a grade (planilha) ao DS v2]], [[I-0005 Propagar paleta DS v2 e auditar contraste WCAG AA]].
 
 ## 🎨 Painel de Design (skills de validação visual)
 
@@ -108,4 +110,4 @@ tipo: hub-projeto
 - **Decisões** → `Decisoes/` · **Entregas** → `Entregas/` · **Itens** → `Itens/` · **Planos** → `planos/`
 
 ---
-*Última atualização: 2026-06-25 (regra de git ajustada: agente pode qualquer operação de git mediante aval do Eduardo).*
+*Última atualização: 2026-06-25 — checkpoint da sessão: tela do projeto no shell DS v2 + overhaul do dashboard + De-Para + fixes dark/export, com deploy em produção (ver [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]]).*
