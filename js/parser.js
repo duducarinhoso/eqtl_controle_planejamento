@@ -13,6 +13,62 @@ const norm = (v) => String(v ?? "").trim();
 const low = (v) => norm(v).toLowerCase();
 /* chave de comparação de EMPRESA: minúsculas + trim + colapsa espaços (mantém acento) */
 const key = (v) => low(v).replace(/\s+/g, " ");
+/* sem acento + minúsculo (p/ comparar "Grupo Equatorial", meses etc.) */
+const deacc = (v) => low(v).normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/* heurística: o texto parece uma DATA? (formatos numéricos + por extenso em pt-BR) */
+const MESES = "janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro";
+export function looksLikeDate(s) {
+  const t = deacc(s).trim();
+  if (!t) return false;
+  if (/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(t)) return true;   // 31/03/2026
+  if (/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}/.test(t)) return true;      // 2026-03-31
+  if (new RegExp("(^|\\s)(" + MESES + ")(\\s|$|/|,)").test(t)) return true;   // "... março ..."
+  if (/^\d{1,2}\s+de\s+/.test(t)) return true;                       // "31 de ..."
+  if (/^\s*(0?[1-9]|[12]\d|3[01])\s+\S/.test(t) && /\b\d{4}\b/.test(t)) return true; // dia ... ano
+  return false;
+}
+
+/* detectLegend(cells): descobre o subtítulo da aba a partir do conteúdo.
+   Estratégia: acha a âncora "Grupo Equatorial" nas primeiras linhas/colunas e,
+   ABAIXO dela (mesma coluna primeiro; depois em faixa próxima), pega o 1º texto
+   que não é vazio, não é a própria âncora e não é data (ex.: "Derivativos").
+   A ordem data↔nome varia entre abas — por isso pulamos qualquer data.
+   Sem âncora → "" (fica em branco para o usuário renomear manualmente).
+   cells: array de { row, col, value }. */
+export function detectLegend(cells) {
+  const map = new Map();
+  let maxRow = 0, maxCol = 0;
+  for (const c of cells || []) {
+    const v = norm(c.value); if (!v) continue;
+    map.set(c.row + ":" + c.col, v);
+    if (c.row > maxRow) maxRow = c.row;
+    if (c.col > maxCol) maxCol = c.col;
+  }
+  const val = (r, c) => map.get(r + ":" + c) || "";
+  const isAnchor = (s) => deacc(s).includes("grupo equatorial");
+  const usable = (t) => t && !isAnchor(t) && !looksLikeDate(t);
+
+  // 1) acha a âncora nas primeiras linhas/colunas
+  let ar = 0, ac = 0;
+  const rLim = Math.min(maxRow, 20), cLim = Math.min(maxCol, 15);
+  outer: for (let r = 1; r <= rLim; r++) for (let c = 1; c <= cLim; c++) {
+    if (isAnchor(val(r, c))) { ar = r; ac = c; break outer; }
+  }
+  if (!ar) return "";
+
+  // 2) mesma coluna, para baixo: 1º texto útil
+  for (let r = ar + 1; r <= Math.min(maxRow, ar + 12); r++) {
+    const t = val(r, ac); if (usable(t)) return t;
+  }
+  // 3) fallback: faixa de linhas logo abaixo, varrendo colunas próximas
+  for (let r = ar + 1; r <= Math.min(maxRow, ar + 6); r++) {
+    for (let c = 1; c <= Math.min(maxCol, ac + 6); c++) {
+      const t = val(r, c); if (usable(t)) return t;
+    }
+  }
+  return "";
+}
 
 /* parseSheet(sheet, cells, companySet, statusSet)
    companySet/statusSet: Set de rotulos em minusculas.
@@ -122,7 +178,7 @@ export async function parseAbas(sheets, loadCells, companies, statusOptions, onP
     let cells = [];
     try { cells = await loadCells(s.id); } catch (_) {}
     const res = parseSheet(s, cells, companyResolve, statusSet);
-    perSheet.push({ sheet: s, res });
+    perSheet.push({ sheet: s, res, legend: detectLegend(cells) });
     for (const rec of res.records) {
       total++;
       byStatus.set(rec.status, (byStatus.get(rec.status) || 0) + 1);

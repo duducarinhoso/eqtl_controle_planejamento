@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { supabase, CONFIG } from "./supabase.js";
+import { detectLegend } from "./parser.js";
 
 const DEFAULT_PASSWORD = "Inovacao#2026";
 
@@ -529,6 +530,13 @@ export async function importWorkbook(sheets, project, onProgress = () => {}) {
       const { data, error } = await supabase.from("sheets").insert({ ...meta, created_by: user?.id }).select().single();
       if (error) throw error;
       sheet = data; byName.set(sh.name, sheet); created++;
+      // legenda detectada da própria planilha (âncora "Grupo Equatorial").
+      // update separado + tolerante: se a coluna `legend` ainda não existir no banco, ignora.
+      try {
+        const legend = detectLegend([...sh.cells].map(([k, o]) => { const [r, c] = k.split(":").map(Number); return { row: r, col: c, value: o.value }; }));
+        await supabase.from("sheets").update({ legend }).eq("id", sheet.id);
+        sheet.legend = legend;
+      } catch (_) {}
     } else {
       await supabase.from("sheets").update(meta).eq("id", sheet.id);
     }

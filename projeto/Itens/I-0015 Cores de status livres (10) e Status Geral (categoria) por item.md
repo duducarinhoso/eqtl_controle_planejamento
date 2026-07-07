@@ -1,7 +1,7 @@
 ---
 id: I-0015
 titulo: Cores de status livres (10) + "Status Geral" (categoria) por item
-status: aberto
+status: resolvido
 prioridade: P1
 frente: Dashboard / Lista de Status
 origem: "chat 2026-06-25"
@@ -10,7 +10,9 @@ decisoes: []
 
 # Cores de status livres + "Status Geral" (categoria) por item
 
-> [!important] Aguardando **confirmação do desenho** pelo Eduardo antes de planejar/implementar. Proposta visual já apresentada no chat (paleta de 10 + linha do editor).
+> [!done] **Concluído — implementado, publicado e migrado em 2026-06-26** (commit `aea67d7`, cache `?v=20`). O Eduardo confirmou o desenho da proposta abaixo.
+> ✅ **`sql/19_status_categoria.sql` aplicado no Supabase** (projeto `scsxisjvtfsqayujfgvd`) — coluna `categoria` criada e backfill conferido via MCP: recebido→Concluído (1), pendente/analise/parcial→Pendência (6), na→N/A (1).
+> Klasses: mantidas as 5 legadas (recebido/pendente/analise/parcial/na) + 5 novas (azul/ciano/roxo/rosa/vermelho) → não migra dados/CSS existentes. Backfill: verde→Concluído, âmbar/teal/coral→Pendência, cinza→N/A.
 
 ## Objetivo (visão do Eduardo)
 Hoje a "Lista de Status" tem 5 cores **semânticas** (verde/âmbar/azul/laranja/cinza = klasses `recebido/pendente/analise/parcial/na`), e a cor **é** a semântica que alimenta os KPIs do dashboard (Concluído/Pendência) e os heatmaps. O Eduardo quer **desacoplar**:

@@ -29,7 +29,9 @@ body{ background:var(--bg); color:var(--text); }
   display:inline-flex; align-items:center; gap:8px; cursor:pointer; line-height:1; }
 .btn:hover{ background:var(--hover); }
 .btn-primary{ background:var(--blue); color:#fff; border-color:transparent; font-weight:600; }
-.btn-primary:hover{ filter:brightness(1.07); }
+/* mantém o fundo azul no hover: sem isto, o `.btn:hover{background:var(--hover)}` acima
+   (mais específico que `.btn-primary`) troca o fundo por claro e o texto branco some no light. */
+.btn-primary:hover{ filter:brightness(1.07); background:var(--blue); color:#fff; }
 .btn-ghost{ background:transparent; border-color:var(--border); }
 .btn-ghost:hover{ background:var(--hover); }
 
@@ -324,6 +326,48 @@ table.umx .hcell{ min-width:34px; border-radius:4px; padding:4px 6px; font-varia
 .dash-emp .track{height:14px;border-radius:4px;display:flex;overflow:hidden;background:var(--divider)}
 .dash-emp .track i{height:100%;transition:filter .14s ease}
 .dash-emp .bar-row:hover .track i{filter:brightness(1.08)}
+
+/* ===== ajustes 2026-07: matriz Empresa×Aba de fora a fora + barras verticais ===== */
+.dash-emp>.card{margin-bottom:var(--gap)}
+.dash-emp .emp-companies{margin-bottom:var(--gap)}
+.dash-emp .card-head .ch-tools{display:flex;align-items:center;gap:12px;margin-left:auto}
+.dash-emp .seg.emp-orient{flex:none}
+
+/* rótulo de aba na matriz: código (b) + legenda (i, em cinza) */
+.dash-emp .emp-mx thead th.th-aba{vertical-align:bottom}
+.dash-emp .emp-th-aba{display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.dash-emp .emp-th-aba b{font-weight:700;color:var(--text);font-size:11.5px}
+.dash-emp .emp-th-aba i{font-style:normal;color:var(--text-dim);font-size:10px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-emp .emp-mx th.rh .rh-aba{display:flex;flex-direction:column;align-items:flex-start;line-height:1.2}
+.dash-emp .rh-aba b{font-weight:600;color:var(--text);font-size:12.5px}
+.dash-emp .rh-aba i{font-style:normal;color:var(--text-dim);font-size:10.5px;font-weight:400}
+
+/* filtro de status agora vive entre a matriz e o gráfico (não mais dentro do quadro) */
+.dash-emp .emp-filters{margin:2px 0 12px}
+
+/* gráfico de barras verticais agrupadas por status (não empilhado), de fora a fora */
+.dash-emp .emp-vbars{display:flex;align-items:flex-end;gap:14px;height:250px;overflow-x:auto;padding:20px 2px 0}
+.dash-emp .vg{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:52px;height:100%;cursor:pointer;border-radius:8px;padding:0 6px 2px;transition:background .14s ease}
+.dash-emp .vg:hover{background:var(--hover)}
+.dash-emp .vg.on{background:color-mix(in srgb,var(--blue) 12%,transparent);box-shadow:inset 0 0 0 1.5px var(--blue)}
+.dash-emp .vbars{flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;gap:4px;width:100%}
+.dash-emp .vb{position:relative;width:16px;min-height:2px;border-radius:4px 4px 0 0;transition:filter .14s ease}
+.dash-emp .vg:hover .vb{filter:brightness(1.06)}
+.dash-emp .vb.zero{background:var(--divider);height:2px!important;width:60%}
+.dash-emp .vb-n{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:600;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.dash-emp .vg-lbl{font-size:11px;color:var(--text);text-align:center;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== realce do botão Exportar + correção de cores da barra de exportação ===== */
+.proj-foot .pf-btn#btn-export{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--text);font-weight:600;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 42%,transparent)}
+.proj-foot .pf-btn#btn-export svg{color:var(--blue)}
+.proj-foot .pf-btn#btn-export:hover{background:color-mix(in srgb,var(--blue) 18%,transparent);color:var(--text)}
+.proj-foot .exp-bar .exp-hint{color:var(--text-dim);font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:2px 2px 4px}
+.proj-foot .exp-bar .exp-all{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;user-select:none}
+.proj-foot .exp-bar .exp-all input{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+.proj-rail .exp-check{accent-color:var(--blue)}
+.proj-foot .exp-bar .btn{margin-top:4px}
+.proj-foot .exp-bar .exp-cancel{color:var(--text-muted);border-color:var(--border)}
+.proj-foot .exp-bar .exp-cancel:hover{background:var(--hover);color:var(--text)}
 
 /* donut */
 .dash-emp .emp-dist{display:flex;align-items:center;gap:18px}

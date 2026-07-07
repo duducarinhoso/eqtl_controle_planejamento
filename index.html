@@ -12,14 +12,14 @@
 
   <!-- Design System v2 (modelos/design-system_v2.html) — CSS verbatim do modelo -->
   <!-- ?v=N = numero de versao para cache. Ao publicar mudancas, suba o N (mesmo numero em todos abaixo + no importmap/app.js). -->
-  <link rel="stylesheet" href="styles/design-system.css?v=20" />
+  <link rel="stylesheet" href="styles/design-system.css?v=21" />
 
-  <link rel="stylesheet" href="styles/tokens.css?v=20" />
-  <link rel="stylesheet" href="styles/app.css?v=20" />
-  <link rel="stylesheet" href="styles/login.css?v=20" />
-  <link rel="stylesheet" href="styles/home.css?v=20" />
-  <link rel="stylesheet" href="styles/app-ds.css?v=20" />
-  <link rel="stylesheet" href="styles/solic.css?v=20" />
+  <link rel="stylesheet" href="styles/tokens.css?v=21" />
+  <link rel="stylesheet" href="styles/app.css?v=21" />
+  <link rel="stylesheet" href="styles/login.css?v=21" />
+  <link rel="stylesheet" href="styles/home.css?v=21" />
+  <link rel="stylesheet" href="styles/app-ds.css?v=21" />
+  <link rel="stylesheet" href="styles/solic.css?v=21" />
 </head>
 <body>
   <!-- estado de carregamento inicial -->
@@ -32,10 +32,10 @@
   <div id="app-root" hidden></div>
 
   <!-- carrega config (copie config.example.js -> config.js) -->
-  <script src="config.js?v=20"></script>
+  <script src="config.js?v=21"></script>
   <!-- Chart.js + JS do modelo (charts/gauges/sparklines/sidebar/tema) verbatim -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script defer src="js/ds.js?v=20"></script>
+  <script defer src="js/ds.js?v=21"></script>
 
   <!-- Cache-busting de TODOS os modulos JS num so lugar. O app.js importa estes
        arquivos sem ?v=; o importmap reescreve cada um para a versao carimbada.
@@ -44,19 +44,19 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/supabase.js": "./js/supabase.js?v=20",
-      "./js/auth.js": "./js/auth.js?v=20",
-      "./js/store.js": "./js/store.js?v=20",
-      "./js/grid.js": "./js/grid.js?v=20",
-      "./js/realtime.js": "./js/realtime.js?v=20",
-      "./js/excel.js": "./js/excel.js?v=20",
-      "./js/parser.js": "./js/parser.js?v=20",
-      "./js/solic.js": "./js/solic.js?v=20",
-      "./js/util.js": "./js/util.js?v=20"
+      "./js/supabase.js": "./js/supabase.js?v=21",
+      "./js/auth.js": "./js/auth.js?v=21",
+      "./js/store.js": "./js/store.js?v=21",
+      "./js/grid.js": "./js/grid.js?v=21",
+      "./js/realtime.js": "./js/realtime.js?v=21",
+      "./js/excel.js": "./js/excel.js?v=21",
+      "./js/parser.js": "./js/parser.js?v=21",
+      "./js/solic.js": "./js/solic.js?v=21",
+      "./js/util.js": "./js/util.js?v=21"
     }
   }
   </script>
   <!-- ponto de entrada -->
-  <script type="module" src="js/app.js?v=20"></script>
+  <script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

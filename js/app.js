@@ -1081,6 +1081,10 @@ function sheetInfo(s) {
   return App.sheetIndex.get(String(s.name || "").trim()) || null;
 }
 function sheetAreaText(s) { const i = sheetInfo(s); return i && i.areas.length ? i.areas.join(" · ") : ""; }
+/* legenda da aba (subtítulo detectado de dentro da planilha; editável).
+   O NOME (ex.: "1.2") vem da origem e não muda; a legenda (ex.: "Derivativos") sim.
+   NULL/undefined = ainda não detectada; "" = detectada e não encontrada (renomear manual). */
+function sheetLegend(s) { return s && s.legend != null ? String(s.legend) : ""; }
 /* a aba índice "Solicitações" virou a tela-tabela: some da lista de abas */
 function isSolicIndex(s) { return !!(s && s.kind === "index" && /solicita/i.test(s.name)); }
 function solicIndexSheet() { return App.sheets.find(isSolicIndex) || null; }
@@ -1103,7 +1107,7 @@ function renderSidebar() {
   if (q && !inExp) {
     sheets = base.filter((s) => {
       const info = sheetInfo(s);
-      const hay = (s.name + " " + sheetAreaText(s) + " " + (info ? info.scot + " " + info.clientPortal : "")).toLowerCase();
+      const hay = (s.name + " " + sheetLegend(s) + " " + sheetAreaText(s) + " " + (info ? info.scot + " " + info.clientPortal : "")).toLowerCase();
       return hay.includes(q);
     });
   }
@@ -1114,8 +1118,8 @@ function renderSidebar() {
   sheets.forEach((s) => {
     const t = App.activity.get(s.id);
     const checked = inExp && App.exportSel.has(s.id);
-    const area = sheetAreaText(s);
-    const tip = s.name + (area ? " · " + area : "") + (t ? "\nAlterado: " + fmtDate(t) : "");
+    const sub = sheetLegend(s);
+    const tip = s.name + (sub ? " · " + sub : "") + (t ? "\nAlterado: " + fmtDate(t) : "");
     const item = h("div", {
       class: "sheet-item" + (!inExp && App.sheet && s.id === App.sheet.id ? " active" : "") + (s.hidden ? " is-hidden" : ""),
       title: tip,
@@ -1128,7 +1132,7 @@ function renderSidebar() {
       inExp ? h("input", { type: "checkbox", class: "exp-check", checked: checked }) : null,
       h("div", { class: "col" },
         h("span", { class: "nm" }, s.name),
-        area ? h("span", { class: "sub-name" }, area) : null),
+        sub ? h("span", { class: "sub-name" }, sub) : null),
       s.kind === "index" && !inExp ? h("span", { class: "badge" }, "índice") : null,
       !inExp ? h("button", { class: "row-menu", title: "Opções", onClick: (e) => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); sheetMenu(r.left, r.bottom, s); } }, "⋯") : null,
     );
@@ -1140,7 +1144,7 @@ function sheetMenu(x, y, s) {
   document.querySelector(".ctx-menu")?.remove();
   const m = h("div", { class: "ctx-menu", style: { left: x + "px", top: y + "px" } });
   const item = (label, fn, danger) => m.appendChild(h("button", { class: danger ? "danger" : "", onClick: () => { m.remove(); fn(); } }, label));
-  item("Renomear…", () => renameSheet(s));
+  item("Renomear legenda…", () => renameSheetLegend(s));
   item(s.hidden ? "Reexibir aba" : "Ocultar aba", async () => { await store.updateSheet(s.id, { hidden: !s.hidden }); await refreshSheets(); });
   m.appendChild(h("div", { class: "sep" }));
   item("Excluir aba", () => confirmDelete(s), true);
@@ -1165,12 +1169,16 @@ async function newSheet() {
   await refreshSheets();
   goSheet(App.project.id, s.id);
 }
-async function renameSheet(s) {
-  const name = await promptModal("Renomear aba", "Novo nome", s.name);
-  if (!name || name === s.name) return;
-  await store.updateSheet(s.id, { name });
+async function renameSheetLegend(s) {
+  // edita só a LEGENDA (subtítulo); o nome/código da aba vem da origem e não muda.
+  const legend = await promptModal(`Legenda da aba ${s.name}`, "Legenda (ex.: Derivativos)", sheetLegend(s));
+  if (legend == null) return;                       // cancelou
+  const val = String(legend).trim();
+  if (val === sheetLegend(s)) return;
+  try { await store.updateSheet(s.id, { legend: val }); }
+  catch (e) { toast("Não consegui salvar a legenda: " + (e.message || e) + " — rode sql/20_sheet_legend.sql no Supabase.", "err"); return; }
+  s.legend = val;
   await refreshSheets();
-  if (App.sheet?.id === s.id) { App.sheet.name = name; renderCrumb(App.sheet); }
 }
 async function confirmDelete(s) {
   if (!(await confirmModal("Excluir aba", `Excluir a aba "${s.name}" e todo o seu conteúdo? Esta ação não pode ser desfeita.`))) return;
@@ -1227,8 +1235,18 @@ async function showDashboard() {
 /* ===== Dashboard · aba "Entregas por empresa" ===== */
 let RAMP_TOTAL = ["#E2EEEC", "#AFD2C9", "#6FB0A2", "#0c3530"]; // rampa neutra (teal) p/ "Todos"
 
+/* filtro de status default = "Pendente" (a tag que reduz o volume). Cai para "all"
+   se o projeto não tiver um status "pendente". */
+function defaultEmpFilter() {
+  const opts = getStatusOptions();
+  return opts.find((l) => String(l).trim().toLowerCase() === "pendente")
+    || opts.find((l) => statusCategoryFor(l) === "pendencia")
+    || "all";
+}
+
 async function renderDashEmpresa(body) {
-  if (!App.empFilter) App.empFilter = "all";
+  if (App.empFilter == null) App.empFilter = defaultEmpFilter();
+  if (!App.empOrient) App.empOrient = "ec";   // "ec" = empresa em coluna (abas em linha) · "el" = empresa em linha
   clear(body);
   body.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
   let data;
@@ -1249,17 +1267,30 @@ async function renderDashEmpresa(body) {
   body.appendChild(wrap);
   wrap.appendChild(h("div", { class: "emp-kpis", id: "emp-kpis" }));
   wrap.appendChild(h("div", { class: "emp-companies", id: "emp-companies" }));   // filtro por empresa (aplica a tudo)
-  const main = h("div", { class: "emp-main" });
+
+  // toggle de orientação da matriz (empresa em coluna ↔ linha)
+  const orientSeg = h("div", { class: "seg emp-orient" });
+  [["ec", "Empresa em coluna"], ["el", "Empresa em linha"]].forEach(([k, l]) =>
+    orientSeg.appendChild(h("button", { class: "seg-b" + (App.empOrient === k ? " on" : ""),
+      onClick: () => { if (App.empOrient === k) return; App.empOrient = k; empPaint(); } }, l)));
+
+  // matriz Empresa × Aba — de fora a fora
   const mxCard = h("div", { class: "card" },
-    h("div", { class: "card-head" }, h("h3", {}, "Matriz · Empresa × Processo"), h("span", { class: "hint", id: "emp-hint" }, "")),
+    h("div", { class: "card-head" }, h("h3", {}, "Matriz · Empresa × Aba"),
+      h("div", { class: "ch-tools" }, h("span", { class: "hint", id: "emp-hint" }, ""), orientSeg)),
     h("div", { class: "card-body" },
-      h("div", { class: "emp-filters", id: "emp-filters" }),
       h("div", { class: "emp-mx-scroll" }, h("table", { class: "emp-mx", id: "emp-mx" })),
-      h("p", { class: "emp-note" }, "Os Totais (linha e geral) contam itens distintos. A soma das colunas pode passar do total geral — um item cuja aba tem mais de uma Área aparece em cada coluna de processo. Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
-  const rail = h("div", { class: "emp-rail" },
-    h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", {}, "Entregas por empresa"), h("span", { class: "hint" }, "ordenado por pendências")), h("div", { class: "card-body" }, h("div", { class: "emp-bars", id: "emp-bars" }))));
-  main.appendChild(mxCard); main.appendChild(rail);
-  wrap.appendChild(main);
+      h("p", { class: "emp-note" }, "Cada coluna é uma aba; a soma das abas de cada empresa bate com o total (cada item pertence a uma aba). Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
+  wrap.appendChild(mxCard);
+
+  // filtro de status — sai do quadro da matriz e passa a filtrar TUDO (matriz + gráfico)
+  wrap.appendChild(h("div", { class: "emp-filters", id: "emp-filters" }));
+
+  // gráfico "Entregas por empresa" — barras verticais agrupadas por status, de fora a fora
+  const chartCard = h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Entregas por empresa"), h("span", { class: "hint" }, "ordenado por pendências")),
+    h("div", { class: "card-body" }, h("div", { class: "emp-vbars", id: "emp-bars" })));
+  wrap.appendChild(chartCard);
 
   empPaint();
 }
@@ -1294,7 +1325,7 @@ function empPaint() {
   empKpis(data);
   empFilters(document.getElementById("emp-filters"), data);
   empMatrix(document.getElementById("emp-mx"), data);
-  empBars(data);
+  empVBars(data);
   const sel = App.empFilter;
   const hint = document.getElementById("emp-hint");
   if (hint) hint.textContent = "Mostrando: " + (sel === "all" ? "total de itens" : "status " + sel) + (App.empCompany ? " · " + App.empCompany : "");
@@ -1311,7 +1342,7 @@ function empKpis(data) {
     else if (cat === "pendencia") pend += qtd;
   });
   const pct = total ? Math.round(recebido / total * 100) : 0;
-  const processos = data.areas.filter((a) => a !== "(sem área)").length;
+  const processos = data.areasCount || 0;
   const ico = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${p}</svg>`;
   const card = (cls, p, label, val) => h("div", { class: "card stat" },
     h("div", { class: "ico " + cls, html: ico(p) }),
@@ -1344,89 +1375,114 @@ function empMatrix(table, data) {
   if (!table) return;
   const sel = App.empFilter;            // "all" | label de status
   const statuses = getStatusOptions();
-  const shown = empCompaniesShown(data);
-  // escala (máximo) para a intensidade da rampa
-  let max = 1;
-  shown.forEach((emp) => data.areas.forEach((area) => {
-    const c = data.matrix.get(emp)?.get(area); if (!c) return;
-    const v = sel === "all" ? c.total : (c.status.get(sel) || 0);
-    if (v > max) max = v;
-  }));
-  const idxOf = (v) => { const r = v / (max || 1); return r <= 0.34 ? 0 : r <= 0.67 ? 1 : 2; };
+  const empByCol = App.empOrient === "ec";   // empresa em coluna → abas nas linhas
+  const emps = empCompaniesShown(data);
+  const abas = data.abas || [];
   const compBar = (comp, tot) => statuses.map((st) => { const q = comp.get(st) || 0; return q ? `<i style="background:var(--st-${statusClassFor(st) || "na"});width:${q / (tot || 1) * 100}%"></i>` : ""; }).join("");
+  const valOf = (c) => !c ? 0 : (sel === "all" ? c.total : (c.status.get(sel) || 0));
+  const empItem = (e) => ({ kind: "emp", key: e, name: e });
+  const abaItem = (a) => ({ kind: "aba", key: a.id, name: a.name, legend: a.legend });
+  const rowItems = empByCol ? abas.map(abaItem) : emps.map(empItem);
+  const colItems = empByCol ? emps.map(empItem) : abas.map(abaItem);
+  const cellOf = (ri, ci) => { const emp = ri.kind === "emp" ? ri.key : ci.key; const sid = ri.kind === "aba" ? ri.key : ci.key; return data.matrixAba.get(emp)?.get(sid); };
+
+  // escala (máximo) p/ a intensidade da rampa
+  let max = 1;
+  rowItems.forEach((ri) => colItems.forEach((ci) => { const v = valOf(cellOf(ri, ci)); if (v > max) max = v; }));
+  const idxOf = (v) => { const r = v / (max || 1); return r <= 0.34 ? 0 : r <= 0.67 ? 1 : 2; };
+  // rótulo de aba: código (b) + legenda (i) em duas linhas
+  const abaHead = (it, cls) => h("span", { class: cls }, h("b", {}, it.name), it.legend ? h("i", {}, it.legend) : null);
 
   clear(table);
   // thead
-  const trh = h("tr", {}, h("th", { class: "corner rh" }, "Empresa"));
-  data.areas.forEach((a) => trh.appendChild(h("th", { title: a }, h("span", { class: "emp-th-lbl" }, a))));
+  const trh = h("tr", {}, h("th", { class: "corner rh" }, empByCol ? "Aba" : "Empresa"));
+  colItems.forEach((ci) => trh.appendChild(ci.kind === "aba"
+    ? h("th", { class: "th-aba", title: ci.name + (ci.legend ? " · " + ci.legend : "") }, abaHead(ci, "emp-th-aba"))
+    : h("th", { title: ci.name }, h("span", { class: "emp-th-lbl" }, ci.name))));
   trh.appendChild(h("th", { class: "col-tot" }, "Total"));
   table.appendChild(h("thead", {}, trh));
-  // tbody + acumuladores p/ a linha de total
+
   const tb = h("tbody", {});
-  const colTot = new Map(), colComp = new Map();    // area -> total / Map(status->qtd) — POR PROCESSO (expande)
-  let grandTot = 0; const grandComp = new Map();    // total geral = itens DISTINTOS
-  shown.forEach((emp) => {
-    const tr = h("tr", {}, h("th", { class: "rh" }, emp));
-    data.areas.forEach((area) => {
-      const c = data.matrix.get(emp)?.get(area);
-      const v = !c ? 0 : (sel === "all" ? c.total : (c.status.get(sel) || 0));
-      if (c) {
-        colTot.set(area, (colTot.get(area) || 0) + c.total);
-        if (!colComp.has(area)) colComp.set(area, new Map());
-        c.status.forEach((q, st) => colComp.get(area).set(st, (colComp.get(area).get(st) || 0) + q));
-      }
+  const colAgg = colItems.map(() => ({ tot: 0, comp: new Map() }));
+  let grandTot = 0; const grandComp = new Map();
+  rowItems.forEach((ri) => {
+    const rh = ri.kind === "aba"
+      ? h("th", { class: "rh rh-aba-cell", title: ri.name + (ri.legend ? " · " + ri.legend : "") }, abaHead(ri, "rh-aba"))
+      : h("th", { class: "rh" }, ri.name);
+    const tr = h("tr", {}, rh);
+    let rowTot = 0; const rowComp = new Map();
+    colItems.forEach((ci, ci_i) => {
+      const c = cellOf(ri, ci);
+      const v = valOf(c);
       const td = h("td", {});
+      if (c) {
+        const contrib = sel === "all" ? c.status : new Map(c.status.has(sel) ? [[sel, c.status.get(sel)]] : []);
+        contrib.forEach((q, st) => { rowComp.set(st, (rowComp.get(st) || 0) + q); colAgg[ci_i].comp.set(st, (colAgg[ci_i].comp.get(st) || 0) + q); });
+        rowTot += v; colAgg[ci_i].tot += v;
+      }
       if (!c || v === 0) { td.appendChild(h("div", { class: "emp-cell empty" }, "·")); tr.appendChild(td); return; }
       const ramp = sel === "all" ? RAMP_TOTAL : rampFor(sel);
-      const i = idxOf(v);
       const compHtml = sel === "all" ? '<div class="comp">' + compBar(c.status, c.total) + "</div>" : "";
+      const empName = ri.kind === "emp" ? ri.name : ci.name;
+      const abaObj = ri.kind === "aba" ? ri : ci;
+      const abaTxt = abaObj.name + (abaObj.legend ? " · " + abaObj.legend : "");
       const cellEl = h("div", { class: "emp-cell has", tabindex: "0", role: "button",
-        style: { background: ramp[i], color: ramp[3] },
+        style: { background: ramp[idxOf(v)], color: ramp[3] },
         html: `<span>${v}</span>${compHtml}` });
       cellEl.addEventListener("click", () => empGoTo(c));
       cellEl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); empGoTo(c); } });
-      cellEl.addEventListener("mouseenter", (e) => empTip(e, emp, area, c));
-      cellEl.addEventListener("mousemove", (e) => empTip(e, emp, area, c, true));
+      cellEl.addEventListener("mouseenter", (e) => empTip(e, empName, abaTxt, c));
+      cellEl.addEventListener("mousemove", (e) => empTip(e, empName, abaTxt, c, true));
       cellEl.addEventListener("mouseleave", empTipHide);
       td.appendChild(cellEl); tr.appendChild(td);
     });
-    // Total da LINHA = itens DISTINTOS da empresa (não a soma das células, que expande por processo)
-    const bcs = data.byCompanyStatus.get(emp) || new Map();
-    let rowTot = 0; bcs.forEach((q) => rowTot += q);
-    grandTot += rowTot;
-    bcs.forEach((q, st) => grandComp.set(st, (grandComp.get(st) || 0) + q));
-    tr.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(rowTot)), h("span", { class: "minibar", html: compBar(bcs, rowTot) }))));
+    grandTot += rowTot; rowComp.forEach((q, st) => grandComp.set(st, (grandComp.get(st) || 0) + q));
+    tr.appendChild(h("td", { class: "tot td-tot" }, rowTot
+      ? h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(rowTot)), h("span", { class: "minibar", html: compBar(rowComp, rowTot) }))
+      : h("div", { class: "emp-cell empty" }, "·")));
     tb.appendChild(tr);
   });
   table.appendChild(tb);
-  // tfoot: total por processo + total geral
+  // tfoot: total por coluna + total geral
   const tf = h("tr", {}, h("th", { class: "rh" }, "Total"));
-  data.areas.forEach((area) => {
-    const t = colTot.get(area) || 0;
-    if (!t) { tf.appendChild(h("td", {}, h("div", { class: "emp-cell empty" }, "·"))); return; }
-    tf.appendChild(h("td", {}, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(t)), h("span", { class: "minibar", html: compBar(colComp.get(area) || new Map(), t) }))));
-  });
+  colItems.forEach((ci, i) => { const t = colAgg[i].tot; tf.appendChild(h("td", {}, t
+    ? h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(t)), h("span", { class: "minibar", html: compBar(colAgg[i].comp, t) }))
+    : h("div", { class: "emp-cell empty" }, "·"))); });
   tf.appendChild(h("td", { class: "tot td-tot" }, h("div", { class: "emp-cell tot-cell" }, h("span", {}, String(grandTot)), h("span", { class: "minibar", html: compBar(grandComp, grandTot) }))));
   table.appendChild(h("tfoot", {}, tf));
 }
-function empBars(data) {
+
+/* gráfico "Entregas por empresa": barras verticais AGRUPADAS por status (não empilhado).
+   Respeita o filtro de status (App.empFilter) e o filtro de empresa. Com "Pendente"
+   (default) cada empresa vira uma barra só — o filtro reduz o volume. */
+function empVBars(data) {
   const host = document.getElementById("emp-bars"); if (!host) return;
+  const sel = App.empFilter;
   const statuses = getStatusOptions();
-  const isPend = (st) => statusCategoryFor(st) === "pendencia";   // I-0015: pendência pela categoria
+  const isPend = (st) => statusCategoryFor(st) === "pendencia";
+  const shownStatuses = (sel === "all" ? statuses : [sel]).filter((st) => data.byStatus.has(st));
   const rows = empCompaniesShown(data).map((emp) => {
-    const agg = data.byCompanyStatus.get(emp) || new Map();   // itens DISTINTOS por status
+    const agg = data.byCompanyStatus.get(emp) || new Map();
     let tot = 0; agg.forEach((q) => tot += q);
     let pend = 0; agg.forEach((q, st) => { if (isPend(st)) pend += q; });
     return { emp, agg, tot, pend };
   }).filter((r) => r.tot > 0).sort((a, b) => b.pend - a.pend);
   clear(host);
+  if (!rows.length) { host.appendChild(h("p", { class: "muted", style: { padding: "18px" } }, "Sem dados para o filtro atual.")); return; }
+  let max = 1;
+  rows.forEach((r) => shownStatuses.forEach((st) => { const q = r.agg.get(st) || 0; if (q > max) max = q; }));
   rows.forEach((r) => {
-    const seg = statuses.map((st) => { const q = r.agg.get(st) || 0; return q ? `<i style="background:var(--st-${statusClassFor(st) || "na"});width:${q / r.tot * 100}%" title="${escapeHtml(st)}: ${q}"></i>` : ""; }).join("");
-    const row = h("div", { class: "bar-row" },
-      h("div", { class: "top" }, h("span", { class: "nm" }, r.emp), h("span", { class: "tt", html: `<b>${r.pend}</b> pend · ${r.tot} itens` })),
-      h("div", { class: "track", html: seg }));
-    row.addEventListener("click", () => { App.empFilter = "all"; empPaint(); toast(`Empresa: ${r.emp} — ${r.tot} itens, ${r.pend} pendência(s).`); });
-    host.appendChild(row);
+    const bars = shownStatuses.map((st) => {
+      const q = r.agg.get(st) || 0; if (!q) return null;
+      return h("i", { class: "vb", title: `${st}: ${q}`, style: { height: (q / max * 100) + "%", background: `var(--st-${statusClassFor(st) || "na"})` } },
+        h("span", { class: "vb-n" }, String(q)));
+    }).filter(Boolean);
+    const grp = h("div", { class: "vg" + (App.empCompany === r.emp ? " on" : "") },
+      h("div", { class: "vbars" }, bars.length ? bars : h("i", { class: "vb zero" })),
+      h("div", { class: "vg-lbl", title: r.emp }, r.emp));
+    grp.title = `${r.emp} — ${r.tot} itens · ${r.pend} pendência(s)`;
+    grp.addEventListener("click", () => { App.empCompany = (App.empCompany === r.emp) ? null : r.emp; empPaint(); });
+    host.appendChild(grp);
   });
 }
 
@@ -1582,23 +1638,32 @@ async function openDeliveriesDrill(ctx = {}) {
   scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) close(); });
   document.body.appendChild(scrim);
 
-  let data, changes;
+  let data, lastChanges;
   try {
     data = await getEmpData();
-    const opts = {};
-    if (userId) opts.userId = userId;
-    if (since) opts.since = since;
-    changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), opts);
+    const statusSet0 = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
+    const all = await store.loadStatusChanges(App.sheets.map((s) => s.id), {});   // todas, desc
+    // dedup: só a ÚLTIMA alteração de cada célula do cruzamento (mesma regra do medidor)
+    const seen = new Set(); lastChanges = [];
+    for (const ch of all) {
+      const ck = ch.sheet_id + ":" + ch.row + ":" + ch.col;
+      if (seen.has(ck)) continue; seen.add(ck);
+      if (!data.cellIndex.has(ck)) continue;
+      const nv = String(ch.new_value || "").trim();
+      if (!nv || !statusSet0.has(nv.toLowerCase())) continue;
+      lastChanges.push(ch);
+    }
   } catch (e) { clear(bodyEl); bodyEl.appendChild(h("p", { class: "muted", style: { padding: "20px" } }, "Erro ao carregar: " + (e.message || e))); return; }
 
-  const statusSet = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
   const wantStatus = status ? normStatusLabel(status).toLowerCase() : null;
   const byEmp = new Map();   // empresa -> Map(sheetName -> {sheetId, items:[{row,col,status,changed_at}]})
   let total = 0;
-  for (const ch of changes) {
-    const nv = String(ch.new_value || "").trim(); if (!nv || !statusSet.has(nv.toLowerCase())) continue;
+  for (const ch of lastChanges) {
+    const nv = String(ch.new_value || "").trim();
     if (wantStatus && normStatusLabel(nv).toLowerCase() !== wantStatus) continue;
     if (day && String(ch.changed_at).slice(0, 10) !== day) continue;
+    if (since && new Date(ch.changed_at) < since) continue;   // período pela data da última alteração
+    if (userId && ch.changed_by !== userId) continue;
     if (userIds && !userIds.has(ch.changed_by)) continue;
     const ci = data.cellIndex.get(ch.sheet_id + ":" + ch.row + ":" + ch.col); if (!ci) continue;
     total++;
@@ -1651,7 +1716,7 @@ async function renderDashUsers(body) {
   };
   body.appendChild(h("div", { class: "dash-head" },
     h("div", {}, h("h2", {}, "Medidor de entregas"),
-      h("p", { class: "sub" }, "Mudanças de status (no cruzamento Empresa×Status) · clique numa pessoa para o detalhe")),
+      h("p", { class: "sub" }, "Último status de cada item (no cruzamento Empresa×Status), atribuído a quem fez a última alteração · o período usa a data dessa alteração")),
     h("div", { class: "dash-ctrls" },
       seg([["7", "7 dias"], ["30", "30 dias"], ["all", "Tudo"]], App.usersPeriod, (k) => { App.usersPeriod = k; renderDashUsers(body); }),
       seg([["su", "Status × Usuário"], ["us", "Usuário × Status"]], App.usersOrient, (k) => { App.usersOrient = k; renderDashUsers(body); }))));
@@ -1660,16 +1725,27 @@ async function renderDashUsers(body) {
 
   const days = App.usersPeriod === "7" ? 7 : App.usersPeriod === "30" ? 30 : null;
   const since = days ? new Date(Date.now() - days * 86400000) : null;
-  // P5.2: medidor = mudanças de status só em células do cruzamento Empresa×Status (parseAbas)
+  // medidor = ÚLTIMO status de cada célula do cruzamento (não o histórico de mudanças).
+  // Dedup: 1ª ocorrência na ordem desc = a alteração mais recente da célula. Assim, se a
+  // pessoa muda N/A→Recebido→N/A, conta 1x (N/A), batendo com abas×empresas×status.
   let rows;
   try {
     const data = await getEmpData();
     const statusSet = new Set(getStatusOptions().map((s) => String(s).trim().toLowerCase()));
-    const changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), { since });
-    const ag = new Map();
+    const changes = await store.loadStatusChanges(App.sheets.map((s) => s.id), {});   // todas, ordenadas por changed_at desc
+    const seen = new Set(); const lastByCell = new Map();
     for (const ch of changes) {
-      const nv = String(ch.new_value || "").trim(); if (!nv || !statusSet.has(nv.toLowerCase())) continue;
-      if (!data.cellIndex.has(ch.sheet_id + ":" + ch.row + ":" + ch.col)) continue;
+      const ck = ch.sheet_id + ":" + ch.row + ":" + ch.col;
+      if (seen.has(ck)) continue; seen.add(ck);          // esta é a última alteração desta célula
+      if (!data.cellIndex.has(ck)) continue;             // fora do cruzamento Empresa×Status
+      const nv = String(ch.new_value || "").trim();
+      if (!nv || !statusSet.has(nv.toLowerCase())) continue;   // último valor não é status válido → não conta
+      lastByCell.set(ck, ch);
+    }
+    const ag = new Map();
+    for (const ch of lastByCell.values()) {
+      if (since && new Date(ch.changed_at) < since) continue;   // período pela data da ÚLTIMA alteração
+      const nv = String(ch.new_value).trim();
       const dia = String(ch.changed_at).slice(0, 10);
       const k = ch.changed_by + "|" + nv + "|" + dia;
       ag.set(k, (ag.get(k) || 0) + 1);
@@ -1709,7 +1785,7 @@ async function renderDashUsers(body) {
   let topSt = "", topN = -1;
   statuses.forEach((st) => { const n = colByStatus(st); if (n > topN) { topN = n; topSt = st; } });
   body.appendChild(h("div", { class: "u-kpis" },
-    kpi("Mudanças no período", String(total)),
+    kpi("Itens no período", String(total)),
     kpi("Pessoas ativas", String(users.length)),
     kpi("Status mais frequente", topN > 0 ? topSt : "—"),
     kpi("Média por dia", String(daySet.size ? Math.round(total / daySet.size) : 0))));
@@ -2339,15 +2415,15 @@ function enterExportMode() {
   if (App.exportMode) return;
   if (!App.sheets.length) { toast("Não há abas para exportar."); return; }
   App.exportMode = true;
-  App.exportSel = new Set(App.sheets.map((s) => s.id));
+  App.exportSel = new Set();                 // default: nenhuma aba marcada (usuário escolhe)
   renderSidebar();
   const bar = $("#exp-bar"); bar.hidden = false; clear(bar);
   bar.appendChild(h("div", { class: "exp-hint" }, "Marque as abas a exportar:"));
   bar.appendChild(h("label", { class: "exp-all" },
-    h("input", { type: "checkbox", id: "exp-all", checked: true, onChange: toggleAllExport }),
+    h("input", { type: "checkbox", id: "exp-all", checked: false, onChange: toggleAllExport }),
     h("span", {}, "Todas as abas")));
   bar.appendChild(h("button", { class: "btn btn-primary btn-sm", id: "exp-confirm", style: { width: "100%" }, onClick: confirmExport }, "Confirmar exportação"));
-  bar.appendChild(h("button", { class: "btn btn-ghost btn-sm", style: { width: "100%", color: "var(--navy-100)", borderColor: "#ffffff33" }, onClick: exitExportMode }, "Cancelar"));
+  bar.appendChild(h("button", { class: "btn btn-ghost btn-sm exp-cancel", style: { width: "100%" }, onClick: exitExportMode }, "Cancelar"));
   updateExpBar();
 }
 function toggleAllExport() {
@@ -3139,56 +3215,64 @@ async function computeAbaStatusCounts() {
    (sheet_link → area[]). Retorna empresas, áreas (processos) e a matriz de
    contagens com alvos de navegação (sheetId/row/col) por célula. */
 async function computeEmpresaAreaData() {
-  // 1) mapa aba(nome) -> Set(áreas) a partir das Solicitações
+  // 1) mapa aba(nome) -> Set(áreas) a partir das Solicitações — só p/ o KPI "Processos (Áreas)"
   let solic = App._solicRows;
   if (!Array.isArray(solic)) { try { solic = await store.loadSolicitacoes(App.project); } catch (_) { solic = []; } }
-  const abaToAreas = new Map();
-  for (const r of solic) {
-    const aba = String(r.sheet_link || "").trim(); if (!aba) continue;
-    if (!abaToAreas.has(aba)) abaToAreas.set(aba, new Set());
-    (Array.isArray(r.area) ? r.area : []).filter(Boolean).forEach((a) => abaToAreas.get(aba).add(a));
-  }
-  // 2) parser: empresa × status por aba (mesma chamada do computeAbaStatusCounts)
+  const areas = new Set();
+  for (const r of solic) (Array.isArray(r.area) ? r.area : []).filter(Boolean).forEach((a) => areas.add(a));
+  // 2) parser: empresa × status por aba (também detecta a legenda de cada aba)
   const parsed = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
-  // 3) cruza: matrix[empresa][área] = { status:Map(label->qtd), total, targets:[{sheetId,row,col,status}] }
-  const empresas = new Set(), areas = new Set();
-  const matrix = new Map();
-  const cell = (emp, area) => {
-    if (!matrix.has(emp)) matrix.set(emp, new Map());
-    const row = matrix.get(emp);
-    if (!row.has(area)) row.set(area, { status: new Map(), total: 0, targets: [] });
-    return row.get(area);
+  // 3) cruza por ABA: matrixAba[empresa][sheetId] = { status:Map(label->qtd), total, targets:[...] }
+  const empresas = new Set();
+  const matrixAba = new Map();
+  const cellFor = (emp, sid) => {
+    if (!matrixAba.has(emp)) matrixAba.set(emp, new Map());
+    const row = matrixAba.get(emp);
+    if (!row.has(sid)) row.set(sid, { status: new Map(), total: 0, targets: [] });
+    return row.get(sid);
   };
   const bySheetStatus = new Map();   // sheetId -> Map(status -> qtd)  (1 por registro)
-  const cellIndex = new Map();       // "sheetId:row:col" -> {sheetId,sheetName,row,col,empresa,areas:Set}
-  for (const { sheet, res } of parsed.perSheet) {
-    const aba = String(sheet.name || "").trim();
-    let abaAreas = [...(abaToAreas.get(aba) || [])];
-    if (!abaAreas.length) abaAreas = ["(sem área)"];
+  const cellIndex = new Map();       // "sheetId:row:col" -> {sheetId,sheetName,row,col,empresa}
+  const abaList = [];                // abas com pelo menos 1 registro
+  const legendUpdates = [];          // backfill de legenda (só onde nunca detectada)
+  for (const { sheet, res, legend } of parsed.perSheet) {
+    // backfill: preenche a legenda 1x quando ainda é NULL (não sobrescreve edição manual nem "").
+    // Reflete já em memória (painel/matriz mostram na hora); a persistência dá durabilidade.
+    if (sheet.legend == null && legend != null) { sheet.legend = legend; legendUpdates.push({ sheet, legend }); }
+    if (!res.records.length) continue;
+    abaList.push({ id: sheet.id, name: sheet.name, legend: sheet.legend != null ? String(sheet.legend) : "" });
     for (const rec of res.records) {
       empresas.add(rec.empresa);
       if (!bySheetStatus.has(sheet.id)) bySheetStatus.set(sheet.id, new Map());
       const bs = bySheetStatus.get(sheet.id);
       bs.set(rec.status, (bs.get(rec.status) || 0) + 1);
       const ck = sheet.id + ":" + rec.row + ":" + rec.col;
-      if (!cellIndex.has(ck)) cellIndex.set(ck, { sheetId: sheet.id, sheetName: sheet.name, row: rec.row, col: rec.col, empresa: rec.empresa, areas: new Set(abaAreas) });
-      for (const area of abaAreas) {
-        areas.add(area);
-        const c = cell(rec.empresa, area);
-        c.status.set(rec.status, (c.status.get(rec.status) || 0) + 1);
-        c.total++;
-        c.targets.push({ sheetId: sheet.id, row: rec.row, col: rec.col, status: rec.status });
-      }
+      if (!cellIndex.has(ck)) cellIndex.set(ck, { sheetId: sheet.id, sheetName: sheet.name, row: rec.row, col: rec.col, empresa: rec.empresa });
+      const c = cellFor(rec.empresa, sheet.id);
+      c.status.set(rec.status, (c.status.get(rec.status) || 0) + 1);
+      c.total++;
+      c.targets.push({ sheetId: sheet.id, row: rec.row, col: rec.col, status: rec.status });
     }
   }
-  const byArea = (a, b) => a === "(sem área)" ? 1 : b === "(sem área)" ? -1 : a.localeCompare(b, "pt");
+  if (legendUpdates.length) { renderSidebar(); persistDetectedLegends(legendUpdates); }   // reflete já; persiste em background
+  abaList.sort((a, b) => natCompare(a.name, b.name));
   return {
     empresas: [...empresas].sort((a, b) => a.localeCompare(b, "pt")),
-    areas: [...areas].sort(byArea),
-    matrix, byStatus: parsed.byStatus, total: parsed.total,
+    abas: abaList,
+    areasCount: areas.size,
+    matrixAba, byStatus: parsed.byStatus, total: parsed.total,
     byCompanyStatus: parsed.byCompanyStatus,   // empresa -> Map(status->qtd) DISTINTO (cada item 1x)
     bySheetStatus, cellIndex,
   };
+}
+
+/* backfill tolerante: persiste a legenda detectada (já refletida em memória). Se a
+   coluna `legend` ainda não existir no banco, silencia (roda sql/20_sheet_legend.sql). */
+async function persistDetectedLegends(updates) {
+  for (const { sheet, legend } of updates) {
+    try { await store.updateSheet(sheet.id, { legend }); }
+    catch (_) { return; }   // coluna ausente → aborta (sem spam de erros)
+  }
 }
 
 /* cache do cruzamento (1 parse por carga de projeto; reusado entre as tabs).
