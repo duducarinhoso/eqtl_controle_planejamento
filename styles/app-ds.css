@@ -164,8 +164,13 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 /* faixa-topo da área de trabalho: breadcrumb dinâmico + presença */
 .proj-head{ display:flex; align-items:center; gap:12px; height:52px; flex:none;
   padding:0 18px; border-bottom:1px solid var(--border); }
-.proj-head .crumb{ font-size:14px; font-weight:500; color:var(--text); }
-.proj-head .crumb .crumb-name{ color:var(--text); }
+.proj-head .crumb{ font-size:14px; font-weight:500; color:var(--text); display:flex; align-items:baseline; gap:7px; min-width:0; }
+.proj-head .crumb .crumb-name{ color:var(--text); font-weight:600; flex:none; }
+/* legenda (subtítulo) da aba ao lado do número; processos ficam menores e sutis */
+.proj-head .crumb .crumb-leg{ color:var(--text); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.proj-head .crumb .crumb-info{ display:flex; gap:10px; min-width:0; margin-left:4px; }
+.proj-head .crumb .crumb-info .ci{ font-size:11px; color:var(--text-dim); font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+.proj-head .crumb .crumb-info .ci b{ color:var(--text-muted); font-weight:600; }
 .proj-head .presence{ margin-left:auto; display:flex; align-items:center; }
 
 /* área que troca de conteúdo (dashboard / solicitações / grade) */
@@ -331,8 +336,16 @@ table.umx .hcell{ min-width:34px; border-radius:4px; padding:4px 6px; font-varia
 /* ===== ajustes 2026-07: matriz Empresa×Aba de fora a fora + barras verticais ===== */
 .dash-emp>.card{margin-bottom:var(--gap)}
 .dash-emp .emp-companies{margin-bottom:var(--gap)}
-.dash-emp .card-head .ch-tools{display:flex;align-items:center;gap:12px;margin-left:auto}
+.dash-emp .card-head .ch-tools{display:flex;align-items:center;gap:12px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
 .dash-emp .seg.emp-orient{flex:none}
+/* toggle "só com ocorrência" */
+.dash-emp .emp-occ{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text-muted);user-select:none}
+.dash-emp .emp-occ input{position:absolute;opacity:0;width:0;height:0}
+.dash-emp .emp-occ .sw{position:relative;width:32px;height:18px;border-radius:999px;background:var(--divider);transition:background .15s ease;flex:none}
+.dash-emp .emp-occ .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
+.dash-emp .emp-occ input:checked + .sw{background:var(--blue)}
+.dash-emp .emp-occ input:checked + .sw::after{transform:translateX(14px)}
+.dash-emp .emp-occ input:focus-visible + .sw{box-shadow:0 0 0 2px var(--card-bg),0 0 0 4px var(--blue)}
 
 /* rótulo de aba na matriz: código (b) + legenda (i, em cinza) */
 .dash-emp .emp-mx thead th.th-aba{vertical-align:bottom}
@@ -557,6 +570,10 @@ table.umx th.u-click:hover{ background:var(--hover); }
 .dash-emp .emp-mx th.col-tot, .dash-emp .emp-mx td.tot{ position:sticky; right:0; background:var(--card-bg); z-index:1; box-shadow:-1px 0 0 var(--divider); }
 .dash-emp .emp-mx thead th.col-tot{ z-index:3; }
 .dash-emp .emp-mx thead th.corner{ z-index:4; }   /* canto sup-esquerdo acima de tudo */
+/* congelar também a LINHA Total (tfoot) no rodapé, como a coluna Total à direita */
+.dash-emp .emp-mx tfoot th, .dash-emp .emp-mx tfoot td{ position:sticky; bottom:0; background:var(--card-bg); z-index:2; box-shadow:0 -1px 0 var(--border); }
+.dash-emp .emp-mx tfoot th.rh{ left:0; z-index:3; }       /* canto inf-esquerdo */
+.dash-emp .emp-mx tfoot td.tot{ right:0; z-index:3; }     /* canto inf-direito (total geral) */
 
 /* =====================================================================
    Atalho do menu global em telas pequenas + nome do usuário na matriz.

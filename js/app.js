@@ -1247,6 +1247,7 @@ function defaultEmpFilter() {
 async function renderDashEmpresa(body) {
   if (App.empFilter == null) App.empFilter = defaultEmpFilter();
   if (!App.empOrient) App.empOrient = "ec";   // "ec" = empresa em coluna (abas em linha) · "el" = empresa em linha
+  if (App.empOnlyOccur == null) App.empOnlyOccur = false;   // default: mostra tudo (não oculta linhas/colunas vazias)
   clear(body);
   body.appendChild(h("div", { class: "spinner", style: { margin: "50px auto" } }));
   let data;
@@ -1283,10 +1284,16 @@ async function renderDashEmpresa(body) {
   };
   [["ec", "Empresa em coluna"], ["el", "Empresa em linha"]].forEach(([k, l]) => orientSeg.appendChild(mkOrient(k, l)));
 
+  // toggle: ocultar linhas/colunas sem ocorrência (default off = mostra tudo)
+  const occChk = h("input", { type: "checkbox", checked: App.empOnlyOccur });
+  occChk.addEventListener("change", () => { App.empOnlyOccur = occChk.checked; empPaint(); });
+  const occToggle = h("label", { class: "emp-occ", title: "Oculta linhas e colunas sem nenhum valor no filtro atual" },
+    occChk, h("span", { class: "sw" }), h("span", { class: "tx" }, "Só com ocorrência"));
+
   // matriz Empresa × Aba — de fora a fora, altura fixa com rolagem vertical
   const mxCard = h("div", { class: "card" },
     h("div", { class: "card-head" }, h("h3", {}, "Matriz · Empresa × Aba"),
-      h("div", { class: "ch-tools" }, h("span", { class: "hint", id: "emp-hint" }, ""), orientSeg)),
+      h("div", { class: "ch-tools" }, h("span", { class: "hint", id: "emp-hint" }, ""), occToggle, orientSeg)),
     h("div", { class: "card-body" },
       h("div", { class: "emp-mx-scroll" }, h("table", { class: "emp-mx", id: "emp-mx" })),
       h("p", { class: "emp-note" }, "Cada aba pertence a uma empresa e a soma bate com o total (cada item pertence a uma aba). Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
@@ -1388,9 +1395,14 @@ function empMatrix(table, data) {
   const valOf = (c) => !c ? 0 : (sel === "all" ? c.total : (c.status.get(sel) || 0));
   const empItem = (e) => ({ kind: "emp", key: e, name: e });
   const abaItem = (a) => ({ kind: "aba", key: a.id, name: a.name, legend: a.legend });
-  const rowItems = empByCol ? abas.map(abaItem) : emps.map(empItem);
-  const colItems = empByCol ? emps.map(empItem) : abas.map(abaItem);
   const cellOf = (ri, ci) => { const emp = ri.kind === "emp" ? ri.key : ci.key; const sid = ri.kind === "aba" ? ri.key : ci.key; return data.matrixAba.get(emp)?.get(sid); };
+  let rowItems = empByCol ? abas.map(abaItem) : emps.map(empItem);
+  let colItems = empByCol ? emps.map(empItem) : abas.map(abaItem);
+  // toggle "só com ocorrência": oculta linhas/colunas sem nenhum valor no filtro atual
+  if (App.empOnlyOccur) {
+    colItems = colItems.filter((ci) => rowItems.some((ri) => valOf(cellOf(ri, ci)) > 0));
+    rowItems = rowItems.filter((ri) => colItems.some((ci) => valOf(cellOf(ri, ci)) > 0));
+  }
 
   // escala (máximo) p/ a intensidade da rampa
   let max = 1;
@@ -2055,6 +2067,8 @@ function renderCrumb(sheet) {
   clear(el);
   if (!sheet) { el.textContent = "—"; return; }
   el.appendChild(h("span", { class: "crumb-name" }, sheet.name));
+  const leg = sheetLegend(sheet);
+  if (leg) el.appendChild(h("span", { class: "crumb-leg", title: leg }, leg));   // legenda ao lado do número
   const info = sheetInfo(sheet);
   if (info) {
     const chips = h("div", { class: "crumb-info" });
@@ -2977,7 +2991,7 @@ async function openCompaniesManager() {
       const label = h("input", { class: "input lm-label", value: o.label });
       const aliases = Array.isArray(o.aliases) ? [...o.aliases] : [];
       const chipsBox = h("div", { class: "lm-aliases" });
-      const aliasInput = h("input", { class: "lm-alias-add", placeholder: "+ grafia (Enter)" });
+      const aliasInput = h("input", { class: "lm-alias-add", placeholder: "+ grafia" });
       const renderChips = () => {
         clear(chipsBox);
         aliases.forEach((a, i) => chipsBox.appendChild(h("span", { class: "lm-alias" },
@@ -2985,16 +2999,18 @@ async function openCompaniesManager() {
           h("button", { class: "lm-alias-x", title: "Remover grafia", onClick: () => { aliases.splice(i, 1); renderChips(); } }, "✕"))));
         chipsBox.appendChild(aliasInput);
       };
-      aliasInput.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter") return;
-        e.preventDefault();
+      // grafia entra sem precisar de Enter: confirma ao sair do campo (blur) ou por Enter/vírgula
+      const commitAlias = (refocus) => {
         const v = aliasInput.value.trim(); if (!v) return;
         const k = keyOf(v);
         if (k === keyOf(label.value) || aliases.some((a) => keyOf(a) === k)) { aliasInput.value = ""; return; }
         const clash = list.find((x) => x.id !== o.id && (keyOf(x.label) === k || (Array.isArray(x.aliases) && x.aliases.some((a) => keyOf(a) === k))));
-        if (clash) return toast(`"${v}" já pertence a ${clash.label}.`, "err");
+        if (clash) { toast(`"${v}" já pertence a ${clash.label}.`, "err"); return; }
         aliases.push(v); aliasInput.value = ""; renderChips();
-      });
+        if (refocus) aliasInput.focus();
+      };
+      aliasInput.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitAlias(true); } });
+      aliasInput.addEventListener("blur", () => commitAlias(false));
       const save = h("button", { class: "btn btn-sm", onClick: async () => {
         const nl = label.value.trim(); if (!nl) return toast("O nome não pode ficar vazio.");
         try { const saved = await store.upsertCompany({ id: o.id, label: nl, position: o.position, aliases }); Object.assign(o, saved); App._empData = null; await reloadCompanies(); toast("Empresa salva."); }
@@ -3207,7 +3223,7 @@ async function openAreasManager() {
 }
 
 async function computeAbaStatusCounts() {
-  const out = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
+  const out = await parseAbas(App.sheets, (id) => store.loadCells(id), App.companies || [], getStatusOptions());
   const m = new Map();
   for (const { sheet, res } of out.perSheet) {
     const byS = new Map();
@@ -3227,7 +3243,7 @@ async function computeEmpresaAreaData() {
   const areas = new Set();
   for (const r of solic) (Array.isArray(r.area) ? r.area : []).filter(Boolean).forEach((a) => areas.add(a));
   // 2) parser: empresa × status por aba (também detecta a legenda de cada aba)
-  const parsed = await parseAbas(App.sheets, (id) => store.loadCells(id), getCompanies(), getStatusOptions());
+  const parsed = await parseAbas(App.sheets, (id) => store.loadCells(id), App.companies || [], getStatusOptions());
   // 3) cruza por ABA: matrixAba[empresa][sheetId] = { status:Map(label->qtd), total, targets:[...] }
   const empresas = new Set();
   const matrixAba = new Map();

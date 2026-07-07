@@ -107,9 +107,33 @@ export function parseSheet(sheet, cells, companyResolve, statusSet) {
 
   // MATRIZ vence se tiver pelo menos tantas empresas no cabecalho quanto a coluna
   if (compCols.length >= 2 && compCols.length >= compColN) {
-    const firstCompCol = Math.min(...compCols);
-    const colCompany = new Map(compCols.map((c) => [c, canon(val(headerRow, c))]));
-    for (let r = headerRow + 1; r <= maxRow; r++) {
+    // Suporte a SEÇÕES: o cabeçalho de empresa pode se repetir coluna abaixo (ex.: um
+    // bloco EQTL MA…GO e, mais abaixo, um bloco CSA na mesma coluna). Cada status é
+    // atribuído à empresa do cabeçalho mais PRÓXIMO ACIMA, na MESMA coluna — assim o
+    // bloco CSA não é contado como a empresa do topo.
+    const compRowsByCol = new Map();   // col -> [linhas com empresa, asc]
+    const compNameAt = new Map();      // "r:c" -> nome canônico
+    for (let c = 1; c <= maxCol; c++) {
+      for (let r = 1; r <= maxRow; r++) {
+        const v = val(r, c);
+        if (v && isCompany(v)) {
+          if (!compRowsByCol.has(c)) compRowsByCol.set(c, []);
+          compRowsByCol.get(c).push(r);
+          compNameAt.set(r + ":" + c, canon(v));
+        }
+      }
+    }
+    const companyCols = [...compRowsByCol.keys()].sort((a, b) => a - b);
+    const firstCompCol = companyCols[0];
+    const firstHeader = Math.min(...[...compNameAt.keys()].map((k) => +k.slice(0, k.indexOf(":"))));
+    const companyAbove = (r, c) => {   // empresa do cabeçalho mais próximo acima, na coluna c
+      const rows = compRowsByCol.get(c); if (!rows) return null;
+      let best = null;
+      for (const hr of rows) { if (hr < r) best = hr; else break; }
+      return best == null ? null : compNameAt.get(best + ":" + c);
+    };
+    const compsUsed = new Set();
+    for (let r = firstHeader + 1; r <= maxRow; r++) {
       let num = "", desc = "";
       for (let c = 1; c < firstCompCol; c++) {
         const t = val(r, c);
@@ -117,12 +141,16 @@ export function parseSheet(sheet, cells, companyResolve, statusSet) {
         if (/^\d+([.,]\d+)?$/.test(t) && !num) num = t;
         else if (t.length > desc.length) desc = t;
       }
-      for (const c of compCols) {
+      for (const c of companyCols) {
         const s = val(r, c);
-        if (isStatusVal(s)) records.push({ empresa: colCompany.get(c), num, desc, status: s, row: r, col: c });
+        if (!isStatusVal(s)) continue;
+        const emp = companyAbove(r, c);
+        if (!emp) continue;
+        compsUsed.add(emp);
+        records.push({ empresa: emp, num, desc, status: s, row: r, col: c });
       }
     }
-    return { orientation: "matrix", companies: [...new Set(compCols.map((c) => canon(val(headerRow, c))))], records, headerRow };
+    return { orientation: "matrix", companies: [...compsUsed], records, headerRow };
   }
 
   // LISTA
