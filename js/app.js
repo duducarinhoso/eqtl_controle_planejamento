@@ -1265,28 +1265,34 @@ async function renderDashEmpresa(body) {
 
   const wrap = h("div", { class: "dash-emp" });
   body.appendChild(wrap);
+
+  // filtro de status — no TOPO e em evidência, pois altera o comportamento de tudo (KPIs? não; matriz + gráfico)
+  wrap.appendChild(h("div", { class: "emp-filterbar" },
+    h("span", { class: "efb-lbl" }, "Filtrar por status"),
+    h("div", { class: "emp-filters", id: "emp-filters" })));
+
   wrap.appendChild(h("div", { class: "emp-kpis", id: "emp-kpis" }));
   wrap.appendChild(h("div", { class: "emp-companies", id: "emp-companies" }));   // filtro por empresa (aplica a tudo)
 
-  // toggle de orientação da matriz (empresa em coluna ↔ linha)
+  // toggle de orientação da matriz (empresa em coluna ↔ linha) — atualiza o realce ao clicar
   const orientSeg = h("div", { class: "seg emp-orient" });
-  [["ec", "Empresa em coluna"], ["el", "Empresa em linha"]].forEach(([k, l]) =>
-    orientSeg.appendChild(h("button", { class: "seg-b" + (App.empOrient === k ? " on" : ""),
-      onClick: () => { if (App.empOrient === k) return; App.empOrient = k; empPaint(); } }, l)));
+  const mkOrient = (k, l) => {
+    const b = h("button", { class: "seg-b" + (App.empOrient === k ? " on" : ""),
+      onClick: () => { if (App.empOrient === k) return; App.empOrient = k; orientSeg.querySelectorAll(".seg-b").forEach((x) => x.classList.remove("on")); b.classList.add("on"); empPaint(); } }, l);
+    return b;
+  };
+  [["ec", "Empresa em coluna"], ["el", "Empresa em linha"]].forEach(([k, l]) => orientSeg.appendChild(mkOrient(k, l)));
 
-  // matriz Empresa × Aba — de fora a fora
+  // matriz Empresa × Aba — de fora a fora, altura fixa com rolagem vertical
   const mxCard = h("div", { class: "card" },
     h("div", { class: "card-head" }, h("h3", {}, "Matriz · Empresa × Aba"),
       h("div", { class: "ch-tools" }, h("span", { class: "hint", id: "emp-hint" }, ""), orientSeg)),
     h("div", { class: "card-body" },
       h("div", { class: "emp-mx-scroll" }, h("table", { class: "emp-mx", id: "emp-mx" })),
-      h("p", { class: "emp-note" }, "Cada coluna é uma aba; a soma das abas de cada empresa bate com o total (cada item pertence a uma aba). Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
+      h("p", { class: "emp-note" }, "Cada aba pertence a uma empresa e a soma bate com o total (cada item pertence a uma aba). Clique (ou Enter) numa célula → abre a aba e vai à célula do item.")));
   wrap.appendChild(mxCard);
 
-  // filtro de status — sai do quadro da matriz e passa a filtrar TUDO (matriz + gráfico)
-  wrap.appendChild(h("div", { class: "emp-filters", id: "emp-filters" }));
-
-  // gráfico "Entregas por empresa" — barras verticais agrupadas por status, de fora a fora
+  // gráfico "Entregas por empresa" — barras verticais agrupadas por status, ocupando toda a largura
   const chartCard = h("div", { class: "card" },
     h("div", { class: "card-head" }, h("h3", {}, "Entregas por empresa"), h("span", { class: "hint" }, "ordenado por pendências")),
     h("div", { class: "card-body" }, h("div", { class: "emp-vbars", id: "emp-bars" })));
