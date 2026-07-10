@@ -88,12 +88,15 @@ export function parseSheet(sheet, cells, companyResolve, statusSet) {
   const canon = (s) => companyResolve.get(key(s));
   const isStatusVal = (s) => statusSet.has(low(s));
 
-  // ---- candidato MATRIZ: linha com >=2 empresas (cabecalho) ----
+  // ---- candidato MATRIZ: linha com >=1 empresa (cabecalho) ----
+  // Aceita cabeçalho de UMA empresa (abas de empresa única, ex.: 1.53 "EQTL PA").
+  // A salvaguarda contra falso-positivo é a exigência de status na coluna da empresa
+  // (mais abaixo, `if (!isStatusVal(s)) continue`).
   let headerRow = 0, compCols = [];
   for (let r = 1; r <= maxRow; r++) {
     const cols = [];
     for (let c = 1; c <= maxCol; c++) if (isCompany(val(r, c))) cols.push(c);
-    if (cols.length >= 2 && cols.length > compCols.length) { headerRow = r; compCols = cols; }
+    if (cols.length >= 1 && cols.length > compCols.length) { headerRow = r; compCols = cols; }
   }
   // ---- candidato LISTA: coluna com >=2 empresas ----
   let compCol = 0, compColN = 0;
@@ -106,7 +109,8 @@ export function parseSheet(sheet, cells, companyResolve, statusSet) {
   const records = [];
 
   // MATRIZ vence se tiver pelo menos tantas empresas no cabecalho quanto a coluna
-  if (compCols.length >= 2 && compCols.length >= compColN) {
+  // (>=1 empresa: aceita abas de empresa única).
+  if (compCols.length >= 1 && compCols.length >= compColN) {
     // Suporte a SEÇÕES: o cabeçalho de empresa pode se repetir coluna abaixo (ex.: um
     // bloco EQTL MA…GO e, mais abaixo, um bloco CSA na mesma coluna). Cada status é
     // atribuído à empresa do cabeçalho mais PRÓXIMO ACIMA, na MESMA coluna — assim o
