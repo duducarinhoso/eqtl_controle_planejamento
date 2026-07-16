@@ -143,6 +143,65 @@ export async function deleteProject(id) {
   if (error) throw error;
 }
 
+/* ===================== PLANNING ITEMS (modelo 'tabela') ===================== */
+/* Colunas de ENTRADA (as 4 de status sao calculadas no cliente, nao persistem). */
+export const PLANNING_FIELDS = [
+  "item_num", "referencia", "grupo", "descricao", "empresa", "segmento",
+  "data_base", "status", "data_solicitacao", "prazo_recebimento",
+  "area_responsavel", "responsavel", "entrega_efetiva",
+];
+const PLANNING_KEY = ["item_num", "referencia", "grupo", "empresa"];
+
+let _planningAvailable = null;
+export async function planningAvailable() {
+  if (_planningAvailable !== null) return _planningAvailable;
+  const { error } = await supabase.from("planning_items").select("id").limit(1);
+  _planningAvailable = !error;      // false se a tabela ainda nao existe (pre-migracao)
+  return _planningAvailable;
+}
+
+export async function listPlanningItems(project) {
+  const pid = project?.id;
+  const { data, error } = await supabase.from("planning_items")
+    .select("*").eq("project_id", pid).order("id", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+/* Insere/atualiza linhas (carga e reimport). rows = objetos com PLANNING_FIELDS.
+   Upsert por (project_id + chave) => idempotente: reimportar nao duplica. Lotes de 500. */
+export async function upsertPlanningItems(rows, project, onProgress) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const pid = project?.id;
+  let done = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = rows.slice(i, i + 500).map((r) => {
+      const o = { project_id: pid, created_by: user?.id, updated_at: new Date().toISOString() };
+      for (const f of PLANNING_FIELDS) o[f] = r[f] ?? null;
+      for (const k of PLANNING_KEY) o[k] = r[k] ?? "";   // colunas NOT NULL da chave
+      return o;
+    });
+    const { error } = await supabase.from("planning_items")
+      .upsert(batch, { onConflict: "project_id,item_num,referencia,grupo,empresa" });
+    if (error) throw error;
+    done += batch.length;
+    onProgress?.(`Gravando ${done}/${rows.length}…`);
+  }
+  return { count: rows.length };
+}
+
+export async function updatePlanningItem(id, patch) {
+  const body = { ...patch, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from("planning_items").update(body).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deletePlanningItems(ids) {
+  if (!ids?.length) return;
+  const { error } = await supabase.from("planning_items").delete().in("id", ids);
+  if (error) throw error;
+}
+
 /* resumo de status -> Map(project_id -> Map(status -> qtd)) */
 function normStatus(v) { const s = String(v || "").trim(); return s.toLowerCase() === "na" ? "N/A" : s; }
 function addCount(map, label, n) { if (!label) return; map.set(label, (map.get(label) || 0) + n); }

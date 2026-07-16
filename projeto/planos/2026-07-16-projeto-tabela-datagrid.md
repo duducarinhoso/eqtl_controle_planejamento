@@ -377,6 +377,8 @@ export async function deletePlanningItems(ids) {
 
 ### Task 2.3: Leitura tipada do `.xlsx` + detecção da aba
 
+> **Nota de execução (2026-07-16):** o plano previa **ExcelJS**, mas na verificação o ExcelJS **travou** ao ler o arquivo real (`wb.xlsx.load` nunca retorna — o arquivo tem *slicers* + Excel Table). Trocado para **SheetJS** (`getXLSX`), que lê o mesmo arquivo em ~0,5s e basta (só precisamos de valores + datas). O `js/table_import.js` final usa SheetJS; o código ExcelJS abaixo ficou histórico.
+
 **Files:**
 - Create: `js/table_import.js`
 

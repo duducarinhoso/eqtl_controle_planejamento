@@ -3,11 +3,11 @@
    Export: mantem layout (larguras, mescla, cores, negrito, alinhamento). */
 
 let _XLSX, _ExcelJS;
-async function getXLSX() {
+export async function getXLSX() {
   if (!_XLSX) _XLSX = await import("https://esm.sh/xlsx@0.18.5");
   return _XLSX;
 }
-async function getExcelJS() {
+export async function getExcelJS() {
   if (!_ExcelJS) { const m = await import("https://esm.sh/exceljs@4.4.0"); _ExcelJS = m.default || m; }
   return _ExcelJS;
 }
