@@ -506,15 +506,36 @@ function projectCard(p) {
 function newProject() {
   const name = h("input", { class: "input", placeholder: "Ex.: Auditoria EQTL 2026" });
   const desc = h("textarea", { class: "input", placeholder: "Descrição (opcional)", rows: 2 });
-  const content = h("div", {}, h("div", { class: "field" }, h("label", {}, "Nome do projeto"), name),
-    h("div", { class: "field" }, h("label", {}, "Descrição"), desc));
+
+  // Escolha do modelo do projeto (grade x tabela)
+  let kind = "grade";
+  const optGrade = h("label", { class: "kind-opt kind-sel" },
+    h("input", { type: "radio", name: "proj-kind", value: "grade", checked: true }),
+    h("div", {}, h("strong", {}, "Planilha / abas"),
+      h("span", { class: "muted" }, "Espelho do Excel: abas e grade, formatação por célula.")));
+  const optTabela = h("label", { class: "kind-opt" },
+    h("input", { type: "radio", name: "proj-kind", value: "tabela" }),
+    h("div", {}, h("strong", {}, "Tabela estruturada"),
+      h("span", { class: "muted" }, "Carrega a Lista de pedidos: colunas fixas, status calculado pela aplicação.")));
+  const kindWrap = h("div", { class: "kind-choices" }, optGrade, optTabela);
+  kindWrap.addEventListener("change", (e) => {
+    kind = e.target.value;
+    kindWrap.querySelectorAll(".kind-opt").forEach((l) =>
+      l.classList.toggle("kind-sel", l.contains(e.target) && e.target.checked));
+  });
+
+  const content = h("div", {},
+    h("div", { class: "field" }, h("label", {}, "Nome do projeto"), name),
+    h("div", { class: "field" }, h("label", {}, "Descrição"), desc),
+    h("div", { class: "field" }, h("label", {}, "Modelo do projeto"), kindWrap));
+
   const api = openModal("Novo projeto", content, [
     { label: "Cancelar", onClick: (a) => a.close() },
     { label: "Criar projeto", primary: true, onClick: async (a) => {
         if (!name.value.trim()) return;
         if (!(await store.projectsAvailable())) { a.close(); return toast("Para criar vários projetos, rode o SQL sql/07_projects.sql no Supabase.", "err"); }
         a.close();
-        try { const p = await store.createProject({ name: name.value.trim(), description: desc.value.trim() }); App._projects = null; goProject(p.id); }
+        try { const p = await store.createProject({ name: name.value.trim(), description: desc.value.trim(), kind }); App._projects = null; goProject(p.id); }
         catch (e) { toast("Erro ao criar: " + e.message, "err"); }
       } },
   ]);
@@ -566,6 +587,12 @@ async function mountProject(project) {
   const slot = mountModuleShell("ops-proj");          // rail global, Operações ativo
   document.querySelector(".app")?.classList.add("in-project");
   slot.classList.add("proj-mode");
+  if (project.kind === "tabela") {                    // modelo novo: tabela estruturada
+    const { buildPlanningPane } = await import("./planning.js");
+    slot.appendChild(buildPlanningPane(project));
+    App.view = "planning";
+    return;
+  }
   slot.appendChild(buildProjectPane());               // rail de contexto + área de trabalho
   await refreshSheets();
 }

@@ -127,10 +127,10 @@ export async function listProjects() {
   return data || [];
 }
 
-export async function createProject({ name, description = "" }) {
+export async function createProject({ name, description = "", kind = "grade" }) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase.from("projects")
-    .insert({ name, description, created_by: user?.id }).select().single();
+    .insert({ name, description, kind, created_by: user?.id }).select().single();
   if (error) throw error;
   return data;
 }
