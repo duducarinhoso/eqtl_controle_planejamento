@@ -17,6 +17,9 @@ tipo: inventario
 | **Projetos (landing)** | `app.js` (`showProjects`/`buildLanding`/`projectCard`) | ✅ concluída — grade de cards, busca, criar/editar/excluir, chips de status por contagem |
 | **Workspace do projeto** | `app.js` (`buildProjectPane`/`buildProjectRail`) + `js/grid.js` + `styles/app-ds.css` | ✅ migrado ao **shell DS v2** (2026-06-25): rail de contexto + dashboard + Solicitações + grade no `.content`; grade re-hospedada (células = I-0012). `buildShell` legado órfão (T6) |
 | **Grade (planilha)** | `js/grid.js` (`class Grid`) | ✅ concluída — edição, undo/redo (200), copy/paste, merge, auto-fit, resize, status semafórico, comentários, presença |
+| **Projeto tabela — Base Gerencial** (modelo `kind='tabela'`) | `js/planning.js` + `js/datagrid.js` + `js/listview.js` + `styles/datagrid.css` | ✅ datagrid vanilla (paridade DataTable/ListView do Cronograma): busca, filtrar choice/data, agrupar, classificar, exportar, chips, virtualização, resize, sticky; edição inline + colunas calculadas (`calc.js`). Falta: seleção/lote (I-0016), data 1-clique (I-0017), reimport modal (I-0018) |
+| **Projeto tabela — Dashboard** | `js/planning.js` (abas) + `js/dashboard.js` + `js/present.js` + `styles/dashboard.css` | ✅ agrega `planning_items` no cliente; KPIs+semáforo, donut, cruzamentos Empresa×Status, ranking área/grupo (scroll), média de atraso, top 5 empresas; filtros interativos; apresentação (copiar imagem/PNG/PDF via CDN) |
+| **Densidade da UI (zoom "Aa")** | `js/uizoom.js` + `js/zoomctl.js` + script anti-flash no `index.html` | ✅ zoom global no `<html>` (default 80%), controle no topbar, persiste; `--app-vh` nos full-height; login em 100% |
 | **Dashboard — aba Empresas** (1ª/default) | `app.js` (`renderDashEmpresa` + `computeEmpresaAreaData`/`getEmpData`) | ✅ matriz Empresa×Processo (Total congelado, cabeçalho 2 linhas, linha de total) + filtro por empresa + barras; **números por itens distintos** (D-0006); cruzamento `parseAbas` |
 | **Dashboard — aba Abas** (ex-"Visão por status") | `app.js` (`renderDashStatus`) | ✅ KPIs por status com drill por aba; conta pelo **cruzamento** `parseAbas` (não mais `loadStatusAggregate`) |
 | **Dashboard — aba Usuários** | `app.js` (`renderDashUsers` + `openUserDrill`) | ✅ medidor restrito ao cruzamento (`cell_history` ∩ células válidas via `store.loadStatusChanges`, fallback RPC) + **modal de drill** empresa→aba→célula |
@@ -43,6 +46,14 @@ tipo: inventario
 | `js/realtime.js` | canais Realtime (sheet/presence/app/online) | ✅ |
 | `js/supabase.js` | init do cliente + `isConfigured` | ✅ |
 | `js/util.js` | helpers (`h`, `$`, `toast`, `statusClass`, `fmtDate`, cores por hash, status defaults) | ✅ |
+| `js/planning.js` | view do modelo tabela: abas Dashboard/Base Gerencial, carga/reimport, colunas + edição inline + proteção da chave | ✅ |
+| `js/datagrid.js` | datagrid vanilla (port do `DataTable.tsx`): auto-fit, resize, sticky, ordenação, seleção, grupos, virtualização, edição inline | ✅ |
+| `js/listview.js` | toolbar vanilla (port do `ListView.tsx`): busca, filtrar choice/data, agrupar, classificar, exportar, chips, seleção em lote, persistência | ✅ |
+| `js/calc.js` | 4 colunas calculadas (Status de entrega/Geral/Prazo, Dias de atraso) fiéis às fórmulas do Excel | ✅ |
+| `js/table_import.js` | leitura tipada do `.xlsx` (SheetJS) + detecção da aba pelas colunas | ✅ |
+| `js/dashboard.js` | agregação client-side + render do painel gerencial (SVG/CSS teal) + filtros interativos | ✅ |
+| `js/present.js` | modo apresentação (tela cheia) + copiar imagem/PNG/PDF (html2canvas/jsPDF por CDN) | ✅ |
+| `js/uizoom.js` / `js/zoomctl.js` | densidade da UI (zoom no `<html>`) + controle "Aa" | ✅ |
 
 ## 🗄️ Entidades Supabase
 
@@ -50,7 +61,8 @@ Ver tabela completa em `Stack.md`. Resumo de prontidão:
 
 | Grupo | Tabelas | Status |
 |---|---|---|
-| Núcleo da grade | `projects`, `sheets`, `cells`, `cell_history`, `comments`, `status_options` | ✅ no ar |
+| Núcleo da grade | `projects` (+ coluna `kind`), `sheets`, `cells`, `cell_history`, `comments`, `status_options` | ✅ no ar |
+| Modelo tabela | `planning_items` (13 col. de entrada + auditoria; índice único `project_id,item_num,referencia,grupo,empresa`) — `sql/22` | ✅ no ar (aplicado) |
 | Usuários/acesso | `profiles`, `allowed_emails`, `online_status`, bucket `avatars` | ✅ no ar |
 | EY Canvas | `ey_requests`, `ey_sync_runs`, `ey_request_changes`, `ey_request_documents` | ✅ no ar |
 | EY Canvas | `ey_engagements` | ✅ no ar — criada e **populada** (2 engagements reais; execução logada) |

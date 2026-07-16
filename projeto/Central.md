@@ -1,5 +1,5 @@
 ---
-data_atualizacao: 2026-06-25
+data_atualizacao: 2026-07-16
 tipo: hub-projeto
 ---
 
@@ -13,6 +13,7 @@ tipo: hub-projeto
 
 ## 🟢 Onde estamos agora
 
+- **🟢 EM PRODUÇÃO — 2º modelo de projeto "tabela" (datagrid vanilla) + Dashboard + densidade + slug (2026-07-16):** nasceu a **tabela estruturada** ao lado da grade (`projects.kind`): carrega a "Lista de pedidos" → `planning_items` (chave `#+Referência+Grupo+Empresa`), colunas fixas + **status calculado pela app** (`calc.js`), num **datagrid vanilla de paridade total** (`datagrid.js`+`listview.js`, port do React do Cronograma, CSS escopado `.dg` mapeado ao teal). Import por **SheetJS** com detecção da aba (ExcelJS trava com slicers — [[D-0010 SheetJS no lugar de ExcelJS (slicers)]]). **Densidade global** (zoom da UI, default 80%, controle "Aa"; login em 100% — [[D-0011 Densidade global (zoom da UI) exceto login]]). **Rota por slug** do nome ([[D-0012 Rota do projeto por slug do nome]]). **Aba Dashboard** (KPIs+semáforo, cruzamentos Empresa×Status, filtros interativos, média de atraso, apresentação: copiar imagem/PNG/PDF). Publicado no `main`/Pages (`88ad503`→`4140ef4`, cache `v=40`). Detalhe: [[E-2026-07-16 Modelo tabela (datagrid vanilla), dashboard, densidade e slug]] · decisão [[D-0009 Segundo modelo de projeto (tabela) com datagrid vanilla]]. **Pendências:** [[I-0016 Acoes em lote na Base Gerencial]], [[I-0017 Edicao de data em 1 clique]], [[I-0018 Reimport com modal de divergencias]]. **Projeto demo** no banco: "2TRI2026 — Tabela (demo)".
 - **🟢 EM PRODUÇÃO — tela do projeto no shell DS v2 + overhaul do dashboard + De-Para + fixes dark (2026-06-25):** abrir um projeto agora **vive no shell DS v2** (rail de contexto + dashboard + Solicitações + grade), com **Dashboard como 1ª tela** ([[I-0010 Tela do projeto integrada no shell do modelo]] ✅). Dashboard reorganizado: tabs **Empresas · Abas · Usuários**; tab Empresas com matriz Empresa×Processo (coluna Total congelada, cabeçalho 2 linhas, linha de total) + **filtro por empresa**; **modal de drill por usuário**; **números por itens distintos** ([[D-0006 Numeros do dashboard contam itens distintos]]); paleta de status **sóbria**. **De-Para de empresas** (grafias→canônico, [[D-0007 De-Para de empresas (grafias-aliases)]]). **Fixes de modo escuro** (grade = espelho do Excel **sempre clara**; drawers/modais/menus theme-aware via remap de tokens — [[D-0008 Grade isolada do tema e drawers theme-aware (dark)]]). **Export Excel** passou a refletir a cor do status. Publicado no `main`/GitHub Pages (commits `90c884d`/`740a87f`/`dae40b4`). Detalhe: [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]]. ⚠️ **Pendente de publicar** (verificado, não commitado): presença dark · config/drawers dark · grid de swatches · export-color. ⚠️ **SQL a rodar no Supabase:** `sql/18_company_aliases.sql` (De-Para).
 - **🆕 Migração para o Design System v2 — shell, sidebar e Projetos (2026-06-24):** o app começou a "mudar para a casa nova" (`modelos/design-system_v2.html`). Trazidos o CSS (`styles/design-system.css`) e o JS (`js/ds.js`) **verbatim** do modelo; **shell + sidebar + tela Projetos** agora no modelo (claro+escuro): 3 módulos (Portal EY / Operações / Administração), tema com toggle, marca (mascote ↔ logo) e conta consolidada na sidebar. Rodado o **painel de design com cross-review** → paleta de status semântica/distinta, contraste WCAG AA, ícones coerentes. Criada a **disciplina de revisão automática** (checklist Definition of Done em § 🎨 Painel de Design). Grade segue legada (escopada `.lg-*`, migra por último). Detalhe: [[E-2026-06-24 Migracao DS v2 (shell, sidebar, Projetos)]] · decisões [[D-0004 Migracao 100% para o DS v2 (casa nova)]] / [[D-0005 Navegacao em 3 modulos e tela do projeto integrada]].
 - **🆕 Painel de skills de design instalado (2026-06-24):** vendorizadas em `.claude/skills/` as skills `impeccable`, `redesign-existing-projects` e `dudu-check-cores` (versionadas → portáveis via git) para agir como **painel de revisão** de visual/estrutura. Roteamento por contexto + protocolo de painel na seção **🎨 Painel de Design** abaixo.
@@ -38,12 +39,15 @@ tipo: hub-projeto
 ## 🎯 Próximos passos imediatos
 
 > [!important] ▶️ COMEÇAR AQUI
-> **2026-06-25 — próximo: CONFIRMAR e implementar CORES + "STATUS GERAL".** O Eduardo pediu **cores de status livres (10, num grid de swatches)** + um campo novo **"Status Geral"** (Concluído / Pendência / N/A) por item, **desacoplando cor de semântica** — a proposta visual já foi mostrada no chat. **Aguardando o "confirma" dele do desenho** → [[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]]. Ao confirmar: `sql/19` (`status_options.categoria`), editor (swatches de 10 + dropdown "Status Geral"), dashboard somando os KPIs por `categoria`, migração herdando da cor atual. **Em paralelo / antes:** (1) **publicar a leva pendente** (presença + config/drawers dark + swatches + export-color → cache-bust `v18→v19`, commit + push no `main`); (2) **rodar `sql/18_company_aliases.sql`** no Supabase (De-Para). Dívida: **T6 — aposentar o shell legado `.lg-*`**.
+> **2026-07-16 — próximo: fechar a frente do modelo tabela.** Faltam 3 pendências, na ordem: (1) **[[I-0017 Edicao de data em 1 clique]]** — clicar 1× na célula de data já abre o seletor + × para limpar (pequeno, o Eduardo reclamou que não é intuitivo); (2) **[[I-0016 Acoes em lote na Base Gerencial]]** — ligar `selectable` + editar/excluir/exportar em lote; (3) **[[I-0018 Reimport com modal de divergencias]]** — tabs Novas/Alterados/Sem mudança/Fora da planilha, preservando edições da app. Planos: `planos/2026-07-16-dashboard-e-acoes-lote.md` (F/G) e `planos/2026-07-16-projeto-tabela-datagrid.md` (Fase 5). Dívidas antigas seguem: I-0015 (cores/Status Geral), T6 (aposentar shell legado `.lg-*`). **Nota infra:** `.env` local (gitignored) tem a `DATABASE_URL` do Postgres para aplicar SQL por `psycopg2` quando o MCP do Supabase cair.
 
 ### Itens abertos (mapa do plano de ajustes)
 | Item | Prioridade | Frente |
 |---|---|---|
-| [[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]] | P1 | Dashboard ◀ próximo (aguarda confirma) |
+| [[I-0017 Edicao de data em 1 clique]] | P2 | Projeto tabela ◀ próximo |
+| [[I-0016 Acoes em lote na Base Gerencial]] | P2 | Projeto tabela |
+| [[I-0018 Reimport com modal de divergencias]] | P2 | Projeto tabela |
+| [[I-0015 Cores de status livres (10) e Status Geral (categoria) por item]] | P1 | Dashboard (aguarda confirma) |
 | [[I-0007 Trabalho em andamento sem commit (home login EY DS v2)]] | P1 | commit/push |
 | [[I-0011 Migrar telas leves restantes ao DS v2]] | P2 | Design |
 | [[I-0012 Re-tematizar a grade (planilha) ao DS v2]] | P2 | Design/Grade |
@@ -110,4 +114,4 @@ tipo: hub-projeto
 - **Decisões** → `Decisoes/` · **Entregas** → `Entregas/` · **Itens** → `Itens/` · **Planos** → `planos/`
 
 ---
-*Última atualização: 2026-06-25 — checkpoint da sessão: tela do projeto no shell DS v2 + overhaul do dashboard + De-Para + fixes dark/export, com deploy em produção (ver [[E-2026-06-25 Tela do projeto no shell DS v2, overhaul do dashboard, De-Para e fixes dark+export]]).*
+*Última atualização: 2026-07-16 — checkpoint da sessão: 2º modelo de projeto "tabela" (datagrid vanilla, port do Cronograma) + Dashboard gerencial + densidade global (zoom) + rota por slug, com deploy em produção (ver [[E-2026-07-16 Modelo tabela (datagrid vanilla), dashboard, densidade e slug]]).*
