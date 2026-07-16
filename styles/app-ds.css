@@ -126,6 +126,7 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 .pt-icon:hover{ background:var(--hover); color:var(--text); }
 .pt-icon svg{ width:18px; height:18px; }
 .planning-body{ flex:1; min-height:0; display:flex; flex-direction:column; padding:12px 20px 16px; }
+.planning-body:has(.dash){ overflow:hidden; }
 .planning-pane .empty-state{ padding:20px; }
 .content .landing-head{ align-items:center; margin-bottom:var(--gap); }
 .page-row h1{ text-transform:uppercase; }
