@@ -68,6 +68,25 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 .content .muted{ color:var(--text-muted); }
 .content .landing-body{ padding:0; }
 
+/* ---- controle de densidade "Aa" (zoom da UI) no topbar ---- */
+.zoomctl{ position:relative; display:inline-flex; }
+.zoomctl-btn{ height:34px; min-width:36px; padding:0 10px; border:1px solid var(--border); border-radius:8px;
+  background:transparent; color:var(--text-muted); font-family:var(--font); font-weight:600; font-size:13px; cursor:pointer; line-height:1; }
+.zoomctl-btn:hover{ background:var(--hover); color:var(--text); }
+.zoomctl-pop{ position:absolute; top:calc(100% + 6px); right:0; z-index:1100; display:none;
+  flex-direction:column; gap:8px; padding:10px; min-width:186px;
+  background:var(--card-bg); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow, 0 8px 24px rgba(0,0,0,.18)); }
+.zoomctl-pop.open{ display:flex; }
+.zoomctl-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.zoomctl-step{ width:32px; height:32px; border:1px solid var(--border); border-radius:6px; background:transparent;
+  color:var(--text); font-size:18px; line-height:1; cursor:pointer; }
+.zoomctl-step:hover:not(:disabled){ background:var(--hover); border-color:var(--blue); color:var(--blue); }
+.zoomctl-step:disabled{ opacity:.4; cursor:not-allowed; }
+.zoomctl-val{ font-weight:600; font-variant-numeric:tabular-nums; color:var(--text); min-width:44px; text-align:center; }
+.zoomctl-reset{ border:0; background:transparent; color:var(--blue); font-family:var(--font); font-weight:600; font-size:12px; cursor:pointer; padding:4px; text-align:center; }
+.zoomctl-reset:hover:not(:disabled){ text-decoration:underline; }
+.zoomctl-reset:disabled{ opacity:.4; cursor:not-allowed; }
+
 /* ---- seletor de MODELO no "Novo projeto" (grade x tabela) ---- */
 .kind-choices{ display:grid; gap:8px; }
 .kind-opt{ display:flex; gap:10px; align-items:flex-start; padding:10px 12px;
@@ -81,9 +100,26 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
   background:color-mix(in srgb, var(--blue) 8%, transparent); }
 
 /* ---- modelo 'tabela' (projeto estruturado) — datagrid vanilla ---- */
-.planning-pane{ display:flex; flex-direction:column; gap:12px; padding:16px 20px; height:100%; min-height:0; }
-.planning-head{ display:flex; align-items:baseline; gap:12px; }
-.planning-head h3{ font-size:16px; font-weight:500; }
+.planning-pane{ display:flex; flex-direction:column; gap:0; padding:0; height:100%; min-height:0; }
+.planning-topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 20px; border-bottom:1px solid var(--border); flex:none; }
+.planning-topbar .pt-left{ display:flex; align-items:center; gap:10px; min-width:0; }
+.planning-topbar .pt-right{ display:flex; align-items:center; gap:10px; flex:none; }
+.pt-back{ display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px 0 8px;
+  border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text-muted);
+  font-family:var(--font); font-size:13px; font-weight:500; cursor:pointer; line-height:1;
+  transition:background .12s ease, color .12s ease, border-color .12s ease; }
+.pt-back:hover{ background:var(--hover); color:var(--text); border-color:var(--blue); }
+.pt-back svg{ width:16px; height:16px; }
+.pt-sep{ color:var(--text-dim); }
+.pt-title{ font-size:16px; font-weight:600; color:var(--text); margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pt-count{ font-size:12px; white-space:nowrap; }
+.pt-icon{ width:36px; height:34px; display:grid; place-items:center; border:1px solid var(--border);
+  border-radius:8px; background:transparent; color:var(--text-muted); cursor:pointer; }
+.pt-icon:hover{ background:var(--hover); color:var(--text); }
+.pt-icon svg{ width:18px; height:18px; }
+.planning-body{ flex:1; min-height:0; display:flex; flex-direction:column; padding:12px 20px 16px; }
+.planning-pane .empty-state{ padding:20px; }
 .content .landing-head{ align-items:center; margin-bottom:var(--gap); }
 .page-row h1{ text-transform:uppercase; }
 .topbar .user .u-name{ color:var(--text); }  /* --blue do modelo reprova no dark */
@@ -113,7 +149,7 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
    Trava a altura (scroll interno) só no modo projeto; os hubs seguem
    com page-scroll normal.
    ===================================================================== */
-.app.in-project{ height:100vh; overflow:hidden; }
+.app.in-project{ height:var(--app-vh); overflow:hidden; }
 .app.in-project .topbar, .app.in-project .page-row{ display:none; }  /* a faixa do projeto os substitui */
 .app.in-project .main{ min-height:0; }
 #mod-content.proj-mode{ flex:1; min-height:0; padding:0; gap:0; display:block; overflow:hidden; }
@@ -543,7 +579,7 @@ table.umx th.u-click:hover{ background:var(--hover); }
 .u-drill > *{ flex:0 0 auto; }   /* impede a compressão das linhas de empresa */
 .u-drill-head{ display:flex; align-items:center; gap:10px; }
 /* modal do drill de entregas: coluna flex limitada à viewport — header/rodapé fixos, corpo rola */
-.modal.u-drill-modal{ display:flex; flex-direction:column; max-height:calc(100vh - 56px); }
+.modal.u-drill-modal{ display:flex; flex-direction:column; max-height:calc(var(--app-vh) - 56px); }
 .modal.u-drill-modal > *{ flex:0 0 auto; }
 .modal.u-drill-modal > .u-drill{ flex:1 1 auto; min-height:0; }
 .u-drill .sub{ color:var(--text-muted); font-size:12.5px; }

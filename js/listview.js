@@ -117,6 +117,7 @@ export class ListView {
     this.rows = opts.rows || [];
     this.selectable = !!opts.selectable;
     this.onRowClick = opts.onRowClick || null;
+    this.onCellEdit = opts.onCellEdit || null;
     this.searchPlaceholder = opts.searchPlaceholder || "Buscar…";
     this.emptyMessage = opts.emptyMessage || "Nenhum registro encontrado.";
     this.actions = opts.actions || null;         // Node
@@ -265,6 +266,7 @@ export class ListView {
       initialExpandedGroups: this.initialExpandedGroups,
       filterableKeys: this.filterableKeys, activeFilterKeys: this._activeFilterKeys(),
       onFilterColumn: (key) => { this.toolMenu = "filtrar"; this.filterCol = key; this.valSearch = ""; this._renderToolbar(); },
+      onCellEdit: this.onCellEdit ? (row, col, value) => { this.onCellEdit(row, col, value); this._pushRows(); } : null,
       selectable: this.selectable, selectedIds: this.selectedIds,
       onToggleSelect: (id) => this._toggleSelect(id), onToggleSelectAll: (c) => this._toggleSelectAll(c),
       onToggleSelectMany: (ids, c) => this._toggleSelectMany(ids, c),

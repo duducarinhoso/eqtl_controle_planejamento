@@ -11,6 +11,11 @@
   --radius:6px;
   --gap:18px;
   --font:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  /* Zoom da UI (alta densidade): --app-zoom e aplicado inline no <html> (js/uizoom.js
+     + script anti-flash). `zoom` NAO expande a viewport, entao todo container de
+     altura cheia usa var(--app-vh) em vez de 100vh/100dvh (senao a tela corta). */
+  --app-zoom:0.8;
+  --app-vh:calc(100dvh / var(--app-zoom));
 }
 
 /* ============ DARK THEME ============ */
@@ -80,7 +85,7 @@ img{display:block;max-width:100%}
 ::-webkit-scrollbar-track{background:transparent}
 
 /* ---------- App shell ---------- */
-.app{display:flex;min-height:100vh}
+.app{display:flex;min-height:var(--app-vh)}
 
 /* ---------- Sidebar ---------- */
 .sidebar{
@@ -89,7 +94,7 @@ img{display:block;max-width:100%}
   display:flex;
   flex-direction:column;
   padding:0;
-  position:sticky;top:0;align-self:flex-start;height:100vh;
+  position:sticky;top:0;align-self:flex-start;height:var(--app-vh);
   overflow:hidden;
   isolation:isolate;
   background:

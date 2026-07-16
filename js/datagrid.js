@@ -12,6 +12,7 @@
      dateValue(row)->string, editable
    }
    Linhas precisam de `id` (number|string). */
+import { appZoom } from "./uizoom.js";
 
 const CHECKBOX_W = 40;
 const COL_MIN_W = 72, COL_MAX_W = 444, CHAR_PX = 6.7, CELL_PAD = 26;
@@ -79,6 +80,7 @@ export class DataGrid {
     this.emptyMessage = opts.emptyMessage || "Nenhum registro encontrado.";
     this.loading = !!opts.loading;
     this.onRowClick = opts.onRowClick || null;
+    this.onCellEdit = opts.onCellEdit || null;   // (row, column, newValue) — edição inline
     this.onToggleSelect = opts.onToggleSelect || null;
     this.onToggleSelectAll = opts.onToggleSelectAll || null;
     this.onToggleSelectMany = opts.onToggleSelectMany || null;
@@ -351,6 +353,10 @@ export class DataGrid {
       const txt = c.cellText?.(row) ?? c.filterValue?.(row);
       if (txt) td.title = txt;
       appendContent(td, c.render(row));
+      if (c.editable && this.onCellEdit) {
+        td.classList.add("dg-editable");
+        td.addEventListener("dblclick", (e) => { e.stopPropagation(); this._startEdit(td, row, c); });
+      }
       tr.appendChild(td);
     });
     return tr;
@@ -379,6 +385,35 @@ export class DataGrid {
     return tr;
   }
 
+  /* edição inline: duplo-clique numa célula editável troca por input/date/select */
+  _startEdit(td, row, c) {
+    if (td.querySelector(".dg-edit")) return;
+    const cur = c.editValue ? c.editValue(row) : (row[c.key] ?? "");
+    let input;
+    if (c.editType === "select") {
+      input = el("select", "dg-edit");
+      for (const o of ["", ...(c.editOptions || [])]) {
+        const op = document.createElement("option"); op.value = o; op.textContent = o || "—";
+        if (String(o) === String(cur ?? "")) op.selected = true; input.appendChild(op);
+      }
+    } else if (c.editType === "date") {
+      input = el("input", "dg-edit", { type: "date" }); input.value = cur ? String(cur).slice(0, 10) : "";
+    } else {
+      input = el("input", "dg-edit", { type: "text" }); input.value = cur ?? "";
+    }
+    const prevTitle = td.title;
+    td.replaceChildren(input); td.removeAttribute("title");
+    input.focus(); input.select?.();
+    let done = false;
+    const commit = () => { if (done) return; done = true; this.onCellEdit(row, c, input.value); };
+    const cancel = () => { if (done) return; done = true; td.title = prevTitle || ""; td.replaceChildren(); appendContent(td, c.render(row)); };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener("blur", commit);
+  }
+
   _toggleGroup(key) { if (this.expanded.has(key)) this.expanded.delete(key); else this.expanded.add(key); this._renderHead(); this._renderBody(); }
   _toggleAll() { const groups = this._groups() || []; const allExp = groups.length > 0 && groups.every((g) => this.expanded.has(g.key)); this.expanded = allExp ? new Set() : new Set(groups.map((g) => g.key)); this._renderHead(); this._renderBody(); }
 
@@ -400,7 +435,8 @@ export class DataGrid {
     btn.onclick = () => {
       if (this._portal) { this._closePortal(); return; }
       const r = btn.getBoundingClientRect();
-      const pop = el("div", "dg-menu-pop", { role: "menu", style: { top: (r.bottom + 4) + "px", left: Math.max(8, Math.min(r.left, window.innerWidth - 214)) + "px" } });
+      const z = appZoom();   // popup fixed no <html> zoomado: coords em px de layout
+      const pop = el("div", "dg-menu-pop", { role: "menu", style: { top: ((r.bottom + 4) / z) + "px", left: (Math.max(8, Math.min(r.left, window.innerWidth - 214)) / z) + "px" } });
       const item = (ico, label, opts = {}) => {
         const b = el("button", "dg-menu-item" + (opts.active ? " active" : ""), { type: "button", role: "menuitem" });
         if (opts.disabled) b.disabled = true;
@@ -436,9 +472,10 @@ export class DataGrid {
     btn.onclick = () => {
       if (this._portal) { this._closePortal(); return; }
       const r = btn.getBoundingClientRect();
+      const z = appZoom();
       const options = [...new Set(this.rows.map((x) => c.filterValue(x)).filter((v) => v != null && v !== ""))].sort((a, b) => a.localeCompare(b, "pt"));
       const cur = new Set(this.colFilters[c.key] ?? []);
-      const pop = el("div", "dg-filter-pop", { style: { top: (r.bottom + 4) + "px", left: Math.max(8, Math.min(r.left, window.innerWidth - 258)) + "px" } });
+      const pop = el("div", "dg-filter-pop", { style: { top: ((r.bottom + 4) / z) + "px", left: (Math.max(8, Math.min(r.left, window.innerWidth - 258)) / z) + "px" } });
       const search = el("input", "dg-filter-search", { placeholder: "Buscar…" });
       const tools = el("div", "dg-filter-tools");
       const all = el("button", "link-btn", { type: "button" }); all.textContent = "Selecionar todos";

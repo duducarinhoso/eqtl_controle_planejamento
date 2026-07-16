@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Controle de Solicitações · EQTL</title>
 
+  <!-- Anti-flash do zoom da UI (alta densidade): aplica antes do 1o paint.
+       Faixa/chave/default DUPLICADOS de js/uizoom.js — manter em sincronia. -->
+  <script>
+    try {
+      var z = parseFloat(localStorage.getItem("eqtl-ui-zoom"));
+      if (!(z >= 0.7 && z <= 1.2)) z = 0.8;   // default denso (padrão Cronograma)
+      var r = document.documentElement.style;
+      r.setProperty("zoom", z);
+      r.setProperty("--app-zoom", z);          // alimenta --app-vh (evita tela cortada)
+    } catch (e) {}
+  </script>
+
   <!-- Fontes do design system -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,15 +24,15 @@
 
   <!-- Design System v2 (modelos/design-system_v2.html) — CSS verbatim do modelo -->
   <!-- ?v=N = numero de versao para cache. Ao publicar mudancas, suba o N (mesmo numero em todos abaixo + no importmap/app.js). -->
-  <link rel="stylesheet" href="styles/design-system.css?v=30" />
+  <link rel="stylesheet" href="styles/design-system.css?v=35" />
 
-  <link rel="stylesheet" href="styles/tokens.css?v=30" />
-  <link rel="stylesheet" href="styles/app.css?v=30" />
-  <link rel="stylesheet" href="styles/login.css?v=30" />
-  <link rel="stylesheet" href="styles/home.css?v=30" />
-  <link rel="stylesheet" href="styles/app-ds.css?v=30" />
-  <link rel="stylesheet" href="styles/solic.css?v=30" />
-  <link rel="stylesheet" href="styles/datagrid.css?v=30" />
+  <link rel="stylesheet" href="styles/tokens.css?v=35" />
+  <link rel="stylesheet" href="styles/app.css?v=35" />
+  <link rel="stylesheet" href="styles/login.css?v=35" />
+  <link rel="stylesheet" href="styles/home.css?v=35" />
+  <link rel="stylesheet" href="styles/app-ds.css?v=35" />
+  <link rel="stylesheet" href="styles/solic.css?v=35" />
+  <link rel="stylesheet" href="styles/datagrid.css?v=35" />
 </head>
 <body>
   <!-- estado de carregamento inicial -->
@@ -33,10 +45,10 @@
   <div id="app-root" hidden></div>
 
   <!-- carrega config (copie config.example.js -> config.js) -->
-  <script src="config.js?v=30"></script>
+  <script src="config.js?v=35"></script>
   <!-- Chart.js + JS do modelo (charts/gauges/sparklines/sidebar/tema) verbatim -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script defer src="js/ds.js?v=30"></script>
+  <script defer src="js/ds.js?v=35"></script>
 
   <!-- Cache-busting de TODOS os modulos JS num so lugar. O app.js importa estes
        arquivos sem ?v=; o importmap reescreve cada um para a versao carimbada.
@@ -45,23 +57,26 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/supabase.js": "./js/supabase.js?v=30",
-      "./js/auth.js": "./js/auth.js?v=30",
-      "./js/store.js": "./js/store.js?v=30",
-      "./js/grid.js": "./js/grid.js?v=30",
-      "./js/realtime.js": "./js/realtime.js?v=30",
-      "./js/excel.js": "./js/excel.js?v=30",
-      "./js/parser.js": "./js/parser.js?v=30",
-      "./js/solic.js": "./js/solic.js?v=30",
-      "./js/planning.js": "./js/planning.js?v=30",
-      "./js/table_import.js": "./js/table_import.js?v=30",
-      "./js/datagrid.js": "./js/datagrid.js?v=30",
-      "./js/listview.js": "./js/listview.js?v=30",
-      "./js/util.js": "./js/util.js?v=30"
+      "./js/supabase.js": "./js/supabase.js?v=35",
+      "./js/auth.js": "./js/auth.js?v=35",
+      "./js/store.js": "./js/store.js?v=35",
+      "./js/grid.js": "./js/grid.js?v=35",
+      "./js/realtime.js": "./js/realtime.js?v=35",
+      "./js/excel.js": "./js/excel.js?v=35",
+      "./js/parser.js": "./js/parser.js?v=35",
+      "./js/solic.js": "./js/solic.js?v=35",
+      "./js/planning.js": "./js/planning.js?v=35",
+      "./js/table_import.js": "./js/table_import.js?v=35",
+      "./js/datagrid.js": "./js/datagrid.js?v=35",
+      "./js/listview.js": "./js/listview.js?v=35",
+      "./js/calc.js": "./js/calc.js?v=35",
+      "./js/uizoom.js": "./js/uizoom.js?v=35",
+      "./js/zoomctl.js": "./js/zoomctl.js?v=35",
+      "./js/util.js": "./js/util.js?v=35"
     }
   }
   </script>
   <!-- ponto de entrada -->
-  <script type="module" src="js/app.js?v=30"></script>
+  <script type="module" src="js/app.js?v=35"></script>
 </body>
 </html>

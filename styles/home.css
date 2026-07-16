@@ -9,7 +9,7 @@
   --ease-fluid: cubic-bezier(.16, 1, .3, 1);
   position: relative;
   width: 100%;
-  height: 100vh; height: 100dvh;
+  height: var(--app-vh);
   min-width: 980px;
   isolation: isolate;
   overflow: hidden;

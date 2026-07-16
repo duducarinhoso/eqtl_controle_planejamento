@@ -7,6 +7,8 @@ import * as excel from "./excel.js";
 import { parseAbas } from "./parser.js";
 import { openSolic, refreshSolic } from "./solic.js";
 import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, statusCategoryFor, getCompanies, setCompanies } from "./util.js";
+import { initZoom } from "./uizoom.js";
+import { buildZoomControl } from "./zoomctl.js";
 
 /* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
    tentando montar os gráficos/medidores DEMO do modelo (IDs lastWeekChart/topProductsChart/
@@ -39,6 +41,7 @@ const App = {
 
 /* ============================ BOOT ============================ */
 async function boot() {
+  initZoom();   // densidade da UI (reaplica o zoom salvo; idempotente com o anti-flash)
   if (!isConfigured) { $("#boot").hidden = true; return showConfigNotice(); }
 
   // fluxo de redefinicao de senha (link do e-mail)
@@ -746,7 +749,7 @@ function buildModuleShell(activeItem) {
     menu,
     h("div", { class: "sidebar-foot" }, userMenu, trigger));
 
-  // main: topbar (busca) + page-row (título/breadcrumb) + content
+  // main: topbar (busca) + controle de densidade "Aa" + page-row + content
   const meta = pageMetaOf(activeItem);
   const search = h("div", { class: "search" });
   search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>';
@@ -754,7 +757,7 @@ function buildModuleShell(activeItem) {
   const burger = h("button", { class: "topbar-burger", "aria-label": "Mostrar menu", title: "Mostrar menu",
     onClick: () => document.getElementById("sidebar")?.classList.toggle("open"),
     html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' });
-  const topbar = h("div", { class: "topbar" }, burger, search);
+  const topbar = h("div", { class: "topbar" }, burger, search, buildZoomControl());
   const pageRow = h("div", { class: "page-row" },
     h("h1", { id: "page-title" }, meta.title),
     h("div", { class: "crumb", id: "page-crumb" }, meta.crumb));

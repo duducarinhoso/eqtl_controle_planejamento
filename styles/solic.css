@@ -30,7 +30,7 @@
 }
 .gp-root /* ===== 2) BASE / TIPOGRAFIA ===== */
 * { box-sizing:border-box; }
-.gp-root, .gp-root { margin:0; height:100vh; overflow:hidden; }
+.gp-root, .gp-root { margin:0; height:var(--app-vh); overflow:hidden; }
 .gp-root { display:flex; font-family:var(--font); color:var(--text); background:var(--bg); font-size:13px; -webkit-font-smoothing:antialiased; }
 .gp-root /* ===== 3) BARRA DE COMANDO (cmdbar) ===== */
 /* base definida lá embaixo na seção de overrides; estes são os controles internos */
@@ -350,7 +350,7 @@ table.grade th.sticky-sel { position:sticky; left:0; z-index:7; background:#0b13
 .gp-root .cm-item span { white-space:nowrap; }
 .gp-root /* ===== 9) MODAL DE FILTRO ===== */
 .modal-bg { position:fixed; inset:0; background:rgba(16,24,40,.42); display:flex; align-items:flex-start; justify-content:center; padding:48px 16px; overflow:auto; z-index:1000; }
-.gp-root .modal { width:100%; background:var(--panel); border-radius:var(--radius-lg); box-shadow:var(--shadow); border:1px solid var(--line); display:flex; flex-direction:column; max-height:calc(100vh - 96px); animation:modal-in .14s ease; }
+.gp-root .modal { width:100%; background:var(--panel); border-radius:var(--radius-lg); box-shadow:var(--shadow); border:1px solid var(--line); display:flex; flex-direction:column; max-height:calc(var(--app-vh) - 96px); animation:modal-in .14s ease; }
 @keyframes modal-in { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
 .gp-root .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); }
 .gp-root .modal-title { font-size:15px; font-weight:800; letter-spacing:-.01em; color:var(--text); }
