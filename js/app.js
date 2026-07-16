@@ -535,7 +535,7 @@ function newProject() {
         if (!name.value.trim()) return;
         if (!(await store.projectsAvailable())) { a.close(); return toast("Para criar vários projetos, rode o SQL sql/07_projects.sql no Supabase.", "err"); }
         a.close();
-        try { const p = await store.createProject({ name: name.value.trim(), description: desc.value.trim(), kind }); App._projects = null; goProject(p.id); }
+        try { const p = await store.createProject({ name: name.value.trim(), description: desc.value.trim(), kind }); App._projects = [ ...(App._projects || []), p ]; goProject(p.id); }
         catch (e) { toast("Erro ao criar: " + e.message, "err"); }
       } },
   ]);
@@ -573,8 +573,19 @@ async function delProject(p) {
 function go(hash) { if (location.hash === hash) applyRoute(); else location.hash = hash; }
 function goProjects() { go("#/projetos"); }
 function goOperacoes() { go("#/operacoes"); }
-function goProject(pid) { go("#/p/" + encodeURIComponent(pid)); }
-function goSheet(pid, sid) { go("#/p/" + encodeURIComponent(pid) + "/s/" + encodeURIComponent(sid)); }
+/* slug amigavel a partir do nome do projeto (URL mais legivel que o UUID).
+   Derivado em runtime; o applyRoute resolve por slug OU por id (links antigos abrem). */
+function slugify(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "projeto";
+}
+function slugForProject(pid) {
+  const p = (App.project && String(App.project.id) === String(pid)) ? App.project
+    : (App._projects || []).find((x) => String(x.id) === String(pid));
+  return p?.name ? slugify(p.name) : String(pid);
+}
+function goProject(pid) { go("#/p/" + encodeURIComponent(slugForProject(pid))); }
+function goSheet(pid, sid) { go("#/p/" + encodeURIComponent(slugForProject(pid)) + "/s/" + encodeURIComponent(sid)); }
 function goToCell(pid, sid, r, c) {
   if (App.sheet && String(App.sheet.id) === String(sid) && App.grid) { App.grid.select(r, c); return; }
   App._pendingCell = { sheetId: sid, r, c }; goSheet(pid, sid);
@@ -621,13 +632,18 @@ async function applyRoute() {
     showHome();
     return;
   }
-  const pid = decodeURIComponent(m[1]);
+  const key = decodeURIComponent(m[1]);
   const sid = m[2] ? decodeURIComponent(m[2]) : null;
-  if (!App.project || String(App.project.id) !== pid || !document.querySelector("#app-root .proj-shell")) {
-    const projs = (App._projects && App._projects.length) ? App._projects : await store.listProjects();
-    App._projects = projs;
-    const proj = projs.find((x) => String(x.id) === pid);
-    if (!proj) return goProjects();
+  // resolve o projeto por SLUG (nome) ou por ID (links antigos com UUID)
+  const matches = (p) => p && (slugify(p.name) === key || String(p.id) === key);
+  if (!matches(App.project) || !document.querySelector("#app-root .proj-shell")) {
+    let proj = matches(App.project) ? App.project : null;
+    if (!proj) {
+      const projs = (App._projects && App._projects.length) ? App._projects : await store.listProjects();
+      App._projects = projs;
+      proj = projs.find(matches);
+      if (!proj) return goProjects();
+    }
     await mountProject(proj);
   }
   if (sid) {
