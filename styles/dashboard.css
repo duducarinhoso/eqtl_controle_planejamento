@@ -1,0 +1,121 @@
+/* Dashboard do projeto tabela — visual do protótipo v2, escopado em .dash.
+   Cores mapeadas ao DS do app (teal) + semáforo (ok/warn/bad/na). Dois temas. */
+.dash{
+  --d-navy:#0e2f38; --d-teal:#1f6b78; --d-info:#2b8aa0; --d-ok:#2f8f5b; --d-warn:#b8862b; --d-bad:#c0503f; --d-na:#8aa0a0;
+  --d-ok-bg:#e4f2ea; --d-bad-bg:#f7e5e1;
+  --d-line:var(--border); --d-panel:var(--card-bg); --d-panel2:var(--input-bg); --d-ink:var(--text); --d-ink2:var(--text-muted); --d-ink3:var(--text-dim);
+  display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--d-ink);
+}
+:root[data-theme="dark"] .dash{ --d-navy:#0b2830; --d-teal:#3f97a4; --d-ok-bg:rgba(47,143,91,.16); --d-bad-bg:rgba(192,80,63,.18); }
+.dash .tnum{ font-variant-numeric:tabular-nums; }
+.dash .d-card{ background:var(--d-panel); border:1px solid var(--d-line); border-radius:9px; padding:12px 13px; min-width:0; }
+.dash .d-card h3{ margin:0 0 9px; font-size:11.5px; font-weight:500; color:var(--d-ink2); }
+
+/* cabeçalho */
+.dash .d-topbar{ background:var(--d-navy); color:#eef6f2; display:flex; align-items:center; gap:16px; padding:10px 16px; border-radius:9px; }
+.dash .d-brand{ display:flex; align-items:center; gap:14px; min-width:0; }
+.dash .d-logo{ height:34px; width:auto; object-fit:contain; }
+.dash .d-vsep{ width:1px; height:32px; background:rgba(255,255,255,.22); }
+.dash .d-titles h1{ margin:0; font-size:17px; font-weight:700; }
+.dash .d-titles p{ margin:1px 0 0; font-size:11px; color:#a9cfc7; text-transform:uppercase; letter-spacing:.08em; }
+.dash .d-topmeta{ margin-left:auto; display:flex; align-items:center; gap:20px; }
+.dash .d-mi{ display:flex; flex-direction:column; gap:1px; }
+.dash .d-mk{ font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:#7fa8a0; }
+.dash .d-mv{ font-size:12px; color:#eef6f2; font-weight:500; }
+.dash .d-topbtns{ display:flex; gap:6px; margin-left:6px; }
+.dash .d-topbtns button{ height:30px; padding:0 11px; border-radius:7px; border:1px solid rgba(255,255,255,.24); background:transparent; color:#eef6f2; font:inherit; font-size:11.5px; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+.dash .d-topbtns button.primary{ background:var(--d-ok); border-color:transparent; }
+.dash .d-topbtns svg{ width:14px; height:14px; }
+
+/* KPIs */
+.dash .d-kpis{ display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
+.dash .d-kpi{ background:var(--d-panel); border:1px solid var(--d-line); border-radius:9px; padding:9px 10px; display:flex; align-items:center; gap:9px; min-width:0; }
+.dash .d-kpi.good{ background:var(--d-ok-bg); }
+.dash .d-kpi.alert{ background:var(--d-bad-bg); border-color:var(--d-bad); }
+.dash .d-ic{ width:34px; height:34px; border-radius:9px; flex:none; display:grid; place-items:center; color:#fff; }
+.dash .d-ic svg{ width:19px; height:19px; }
+.dash .d-ic-info{ background:var(--d-info); } .dash .d-ic-teal{ background:var(--d-teal); } .dash .d-ic-ok{ background:var(--d-ok); }
+.dash .d-ic-warn{ background:var(--d-warn); } .dash .d-ic-bad{ background:var(--d-bad); } .dash .d-ic-na{ background:var(--d-na); }
+.dash .d-val{ font-size:20px; font-weight:500; line-height:1; } .dash .d-lab{ font-size:10.5px; color:var(--d-ink2); margin-top:2px; } .dash .d-hint{ font-size:10px; color:var(--d-ink3); margin-top:1px; }
+
+/* filtros */
+.dash .d-filters{ display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.dash .d-flab{ font-size:10px; color:var(--d-ink3); text-transform:uppercase; letter-spacing:.09em; }
+.dash .d-fdrop{ display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 10px; border:1px solid var(--d-line); border-radius:7px; background:var(--d-panel); font-size:12px; color:var(--d-ink); cursor:pointer; }
+.dash .d-fdrop.on{ border-color:var(--d-teal); }
+.dash .d-fv{ color:var(--d-teal); font-weight:500; }
+.dash .d-fclear{ margin-left:auto; font-size:12px; color:var(--d-teal); background:none; border:0; cursor:pointer; font-weight:500; }
+
+/* grids */
+.dash .d-g3{ display:grid; grid-template-columns:280px 1fr 1fr; gap:10px; }
+.dash .d-gabc{ display:grid; grid-template-columns:1.1fr 1fr 1.1fr; gap:10px; }
+.dash .d-g2{ display:grid; grid-template-columns:1fr 1.3fr; gap:10px; }
+
+/* donut */
+.dash .d-donutrow{ display:flex; align-items:center; gap:14px; }
+.dash .d-donut{ width:118px; height:118px; border-radius:50%; flex:none; display:grid; place-items:center; }
+.dash .d-in{ width:80px; height:80px; border-radius:50%; background:var(--d-panel); display:grid; place-items:center; text-align:center; }
+.dash .d-p{ font-size:22px; font-weight:500; } .dash .d-c{ font-size:9px; color:var(--d-ink3); text-transform:uppercase; letter-spacing:.08em; }
+.dash .d-dleg{ display:flex; flex-direction:column; gap:6px; font-size:12px; flex:1; }
+.dash .d-dleg .d-r{ display:flex; align-items:center; gap:7px; } .dash .d-dleg .d-v{ margin-left:auto; font-weight:500; }
+.dash .d-dot{ width:10px; height:10px; border-radius:2px; flex:none; }
+
+/* barras */
+.dash .d-clegend{ display:flex; gap:13px; margin-bottom:8px; font-size:11px; color:var(--d-ink2); }
+.dash .d-clegend .d-r{ display:flex; align-items:center; gap:5px; }
+.dash .d-bars{ display:flex; flex-direction:column; gap:6px; }
+.dash .d-scroll{ max-height:212px; overflow-y:auto; padding-right:3px; }
+.dash .d-brow{ display:grid; grid-template-columns:110px 1fr; align-items:center; gap:9px; font-size:12px; }
+.dash .d-bl{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dash .d-track{ height:15px; border-radius:4px; background:var(--d-panel2); display:flex; overflow:hidden; box-shadow:inset 0 0 0 1px var(--d-line); }
+.dash .d-seg{ height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right:4px; font-size:9.5px; color:#fff; font-weight:500; min-width:0; }
+.dash .d-fill{ height:100%; background:var(--d-teal); border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:5px; color:#fff; font-size:9.5px; font-weight:500; }
+.dash .d-fill.hot{ background:var(--d-bad); }
+.dash .d-scrollhint{ font-size:9.5px; color:var(--d-ink3); margin-top:5px; text-align:center; }
+
+/* média de atraso / saúde */
+.dash .d-atr{ display:flex; flex-direction:column; gap:9px; }
+.dash .d-seg2{ display:flex; gap:8px; }
+.dash .d-abox{ flex:1; background:var(--d-panel2); border-radius:7px; padding:8px 10px; }
+.dash .d-ak{ font-size:10px; color:var(--d-ink3); text-transform:uppercase; letter-spacing:.06em; }
+.dash .d-arow{ display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-top:3px; }
+.dash .d-arow span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dash .d-health{ display:flex; align-items:center; gap:9px; background:var(--d-ok-bg); border:1px solid var(--d-ok); border-radius:8px; padding:9px 11px; }
+.dash .d-health.bad{ background:var(--d-bad-bg); border-color:var(--d-bad); }
+.dash .d-hi{ width:30px; height:30px; border-radius:50%; background:var(--d-ok); color:#fff; display:grid; place-items:center; flex:none; }
+.dash .d-health.bad .d-hi{ background:var(--d-bad); }
+.dash .d-hi svg{ width:18px; height:18px; }
+.dash .d-ht{ font-size:12.5px; font-weight:500; color:var(--d-ok); } .dash .d-health.bad .d-ht{ color:var(--d-bad); }
+.dash .d-hs{ font-size:11px; color:var(--d-ink2); }
+
+/* top5 */
+.dash .d-top5{ display:flex; flex-direction:column; gap:6px; }
+.dash .d-t5row{ display:grid; grid-template-columns:20px 1fr auto; align-items:center; gap:8px; font-size:12px; }
+.dash .d-rk{ width:20px; height:20px; border-radius:5px; background:var(--d-teal); color:#fff; display:grid; place-items:center; font-size:11px; font-weight:500; }
+.dash .d-pc{ color:var(--d-ink3); font-size:11px; }
+.dash .d-foot{ font-size:10.5px; color:var(--d-ink3); display:flex; justify-content:space-between; gap:12px; padding:2px; }
+
+/* popover de filtro (portal no body) */
+.d-fpop{ position:fixed; z-index:1100; width:230px; background:var(--card-bg); border:1px solid var(--border);
+  border-radius:8px; box-shadow:0 12px 30px rgba(2,10,30,.28); padding:8px; display:flex; flex-direction:column; gap:6px; }
+.d-fpop-search{ height:30px; border:1px solid var(--input-border); border-radius:6px; background:var(--input-bg); color:var(--text); font:inherit; font-size:12px; padding:0 9px; outline:none; }
+.d-fpop-tools{ display:flex; justify-content:space-between; }
+.d-fpop-link{ border:0; background:none; color:var(--blue); font:inherit; font-size:11px; font-weight:500; cursor:pointer; }
+.d-fpop-list{ max-height:240px; overflow-y:auto; display:flex; flex-direction:column; }
+.d-fpop-item{ display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:5px; font-size:12px; cursor:pointer; color:var(--text); }
+.d-fpop-item:hover{ background:var(--hover); }
+.d-fpop-item input{ width:15px; height:15px; accent-color:var(--blue); cursor:pointer; flex:none; }
+.d-fpop-item span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.d-fpop-empty{ padding:10px; text-align:center; color:var(--text-muted); font-size:12px; }
+.d-fpop-foot{ display:flex; justify-content:flex-end; border-top:1px solid var(--border); padding-top:6px; }
+.d-fpop-apply{ height:28px; padding:0 14px; border-radius:6px; border:0; background:var(--blue); color:#fff; font:inherit; font-size:12px; font-weight:500; cursor:pointer; }
+
+/* modo apresentação (tela cheia) */
+.dash-present{ position:fixed; inset:0; z-index:1300; background:rgba(6,20,24,.72); display:flex; flex-direction:column; align-items:center; gap:12px; padding:16px; overflow:auto; }
+.dp-bar{ display:flex; gap:8px; }
+.dp-btn{ height:34px; padding:0 15px; border-radius:8px; border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.10); color:#fff; font:inherit; font-size:12.5px; font-weight:500; cursor:pointer; }
+.dp-btn:hover{ background:rgba(255,255,255,.18); }
+.dp-close{ background:transparent; }
+.dp-sheet{ background:var(--card-bg); border-radius:10px; padding:16px; width:min(1400px,96vw); box-shadow:0 30px 80px rgba(0,0,0,.5); }
+
+@media (max-width:1200px){ .dash .d-kpis{ grid-template-columns:repeat(4,1fr); } .dash .d-g3,.dash .d-gabc,.dash .d-g2{ grid-template-columns:1fr; } }

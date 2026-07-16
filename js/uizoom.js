@@ -26,6 +26,9 @@ export function appZoom() {
   return parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
 }
 export function initZoom() { applyZoom(getZoom()); }
+/* Suspende o zoom (volta a 100%) SEM persistir — a tela de login/auth não usa a
+   densidade do app. O app reaplica getZoom() ao montar (applyRoute autenticado). */
+export function suspendZoom() { applyZoom(1); }
 export function setZoom(z) {
   z = clampZoom(z);
   try { localStorage.setItem(KEY, String(z)); } catch { /* modo privado */ }

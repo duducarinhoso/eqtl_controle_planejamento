@@ -114,6 +114,13 @@ textarea.input{ height:auto; padding:10px 12px; resize:vertical; }
 .pt-sep{ color:var(--text-dim); }
 .pt-title{ font-size:16px; font-weight:600; color:var(--text); margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pt-count{ font-size:12px; white-space:nowrap; }
+/* abas Dashboard | Base Gerencial (sublinhado teal na ativa) */
+.planning-tabs{ display:flex; gap:2px; }
+.planning-tab{ position:relative; border:0; background:transparent; color:var(--text-muted); font-family:var(--font);
+  font-size:13px; font-weight:500; padding:8px 14px 9px; cursor:pointer; border-radius:7px 7px 0 0; }
+.planning-tab:hover{ color:var(--text); background:var(--hover); }
+.planning-tab.on{ color:var(--blue); }
+.planning-tab.on::after{ content:""; position:absolute; left:8px; right:8px; bottom:0; height:2.5px; border-radius:3px; background:var(--blue); }
 .pt-icon{ width:36px; height:34px; display:grid; place-items:center; border:1px solid var(--border);
   border-radius:8px; background:transparent; color:var(--text-muted); cursor:pointer; }
 .pt-icon:hover{ background:var(--hover); color:var(--text); }

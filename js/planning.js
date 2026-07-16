@@ -9,6 +9,11 @@ import { parseTableXlsx } from "./table_import.js";
 import { ListView } from "./listview.js";
 import { statusEntrega, statusGeral, statusPrazo, diasAtraso, statusKlass } from "./calc.js";
 import { buildZoomControl } from "./zoomctl.js";
+import { buildDashboard } from "./dashboard.js";
+
+const TAB_KEY = (pid) => "eqtl.planning.tab." + pid;
+function getTab(pid) { try { return localStorage.getItem(TAB_KEY(pid)) || "dashboard"; } catch { return "dashboard"; } }
+function setTab(pid, t) { try { localStorage.setItem(TAB_KEY(pid), t); } catch { /* */ } }
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 function fmtData(d) {
@@ -60,7 +65,7 @@ export function buildPlanningPane(project) {
 
 /* Topbar do projeto tabela: voltar aos Projetos + nome + contagem + densidade "Aa".
    (No modelo tabela o topbar do shell fica oculto — esta barra dá navegação e config.) */
-function buildTopbar(project, count) {
+function buildTopbar(project, count, activeTab, onTab) {
   const back = h("button", { class: "pt-back", title: "Voltar aos projetos", "aria-label": "Voltar aos projetos",
     onClick: () => { location.hash = "#/projetos"; },
     html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' });
@@ -68,10 +73,16 @@ function buildTopbar(project, count) {
   const theme = h("button", { class: "pt-icon", title: "Alternar tema", "aria-label": "Alternar tema",
     onClick: () => window.toggleTheme && window.toggleTheme(),
     html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' });
+  const tab = (id, label) => {
+    const b = h("button", { class: "planning-tab" + (activeTab === id ? " on" : ""), onClick: () => onTab(id) }, label);
+    return b;
+  };
+  const tabs = onTab ? h("div", { class: "planning-tabs" }, tab("dashboard", "Dashboard"), tab("base", "Base Gerencial")) : null;
   return h("div", { class: "planning-topbar" },
     h("div", { class: "pt-left" }, back,
       h("span", { class: "pt-sep", "aria-hidden": "true" }, "/"),
       h("h1", { class: "pt-title" }, project.name)),
+    tabs,
     h("div", { class: "pt-right" },
       h("span", { class: "pt-count muted" }, `${count} linha(s)`),
       theme, buildZoomControl()));
@@ -90,10 +101,8 @@ async function render(pane, project) {
     return;
   }
 
-  // Topbar do projeto: voltar aos projetos + nome + contagem + densidade
-  pane.appendChild(buildTopbar(project, items.length));
-
   if (!items.length) {
+    pane.appendChild(buildTopbar(project, 0, null, null));
     const btn = h("button", { class: "btn btn-primary" }, "Carregar planilha");
     btn.onclick = () => importFlow(project, () => render(pane, project));
     pane.appendChild(h("div", { class: "empty-state" },
@@ -101,12 +110,25 @@ async function render(pane, project) {
     return;
   }
 
-  // Botão de reimport como ação da toolbar do ListView
-  const btnImport = h("button", { class: "btn btn-primary btn-sm" }, "Reimportar planilha");
-  btnImport.onclick = () => importFlow(project, () => render(pane, project));
-
+  // Topbar com abas (Dashboard | Base Gerencial) + corpo conforme a aba ativa
   const host = h("div", { class: "planning-body" });
-  pane.appendChild(host);
+  const mount = (tab) => {
+    setTab(project.id, tab);
+    pane.replaceChildren(buildTopbar(project, items.length, tab, mount), host);
+    renderBody(host, project, items, tab);
+  };
+  mount(getTab(project.id));
+}
+
+function renderBody(host, project, items, tab) {
+  host.replaceChildren();
+  if (tab === "dashboard") {
+    host.appendChild(buildDashboard(project, items));
+    return;
+  }
+  // Base Gerencial (datagrid)
+  const btnImport = h("button", { class: "btn btn-primary btn-sm" }, "Reimportar planilha");
+  btnImport.onclick = () => importFlow(project, () => render(host.closest(".planning-pane"), project));
   new ListView(host, {
     columns: planningColumns(items),
     rows: items,

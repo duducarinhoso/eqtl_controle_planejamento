@@ -7,7 +7,7 @@ import * as excel from "./excel.js";
 import { parseAbas } from "./parser.js";
 import { openSolic, refreshSolic } from "./solic.js";
 import { h, $, clear, toast, initials, colorFromString, escapeHtml, fmtDate, colName, debounce, getStatusOptions, setStatusOptions, statusClassFor, statusCategoryFor, getCompanies, setCompanies } from "./util.js";
-import { initZoom } from "./uizoom.js";
+import { initZoom, suspendZoom } from "./uizoom.js";
 import { buildZoomControl } from "./zoomctl.js";
 
 /* Guarda do renderAll do ds.js: o toggleTheme do modelo dispara renderAll() em qualquer tela,
@@ -88,6 +88,7 @@ function showConfigNotice() {
 
 function showAuth(mode) {
   App.sheet = null;
+  suspendZoom();   // login/auth não usa o zoom da UI (evita a tela cortada)
   const a = $("#auth-root"), ap = $("#app-root");
   ap.hidden = true; a.hidden = false;
   renderAuth(a, mode);
@@ -616,6 +617,7 @@ async function applyRoute() {
   if (hash.includes("access_token") || hash.includes("type=recovery")) return;
   if (!(await ensureProfile())) return;
   if (App.profile.must_change_password) return forceChangePassword();   // 1º acesso: trocar senha
+  initZoom();   // app autenticado: reaplica o zoom da UI (o login o havia suspendido)
   const m = hash.match(/^#\/p\/([^/]+)(?:\/s\/([^/]+))?$/);
   if (!m) {
     // ----- Operações: lista de projetos dentro do module shell -----
