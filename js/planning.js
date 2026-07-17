@@ -38,7 +38,7 @@ function planningColumns(items) {
   const calc = (key, header, fn) => ({ key, header, render: (r) => { const v = fn(r); return v ? h("span", { class: "dg-status " + statusKlass(v) }, v) : ""; }, cellText: (r) => String(fn(r) ?? ""), filterValue: (r) => String(fn(r) ?? ""), sortKey: key });
   return [
     { key: "item_num", header: "#", sticky: true, width: 74, editable: true, editType: "text", render: (r) => h("span", { class: "cell-strong" }, txt(r.item_num)), cellText: (r) => txt(r.item_num) },
-    inText("referencia", "Referência"),
+    inText("referencia", "Referência", { filterValue: (r) => txt(r.referencia) }),
     inText("grupo", "Grupo", { filterValue: (r) => txt(r.grupo) }),
     inText("descricao", "Descrição no Client portal"),
     inText("empresa", "Empresa", { filterValue: (r) => txt(r.empresa) }),
@@ -112,18 +112,19 @@ async function render(pane, project) {
 
   // Topbar com abas (Dashboard | Base Gerencial) + corpo conforme a aba ativa
   const host = h("div", { class: "planning-body" });
-  const mount = (tab) => {
+  const mount = (tab, drill) => {
     setTab(project.id, tab);
     pane.replaceChildren(buildTopbar(project, items.length, tab, mount), host);
-    renderBody(host, project, items, tab);
+    renderBody(host, project, items, tab, mount, drill);
   };
   mount(getTab(project.id));
 }
 
-function renderBody(host, project, items, tab) {
+/* drill: o Dashboard manda {coluna: [valores]} e abrimos a Base Gerencial filtrada */
+function renderBody(host, project, items, tab, mount, drill) {
   host.replaceChildren();
   if (tab === "dashboard") {
-    host.appendChild(buildDashboard(project, items));
+    host.appendChild(buildDashboard(project, items, { onDrill: (colSel) => mount("base", colSel) }));
     return;
   }
   // Base Gerencial (datagrid)
@@ -132,6 +133,7 @@ function renderBody(host, project, items, tab) {
   new ListView(host, {
     columns: planningColumns(items),
     rows: items,
+    initialColSel: drill || undefined,
     persistKey: "planning:" + project.id,
     searchPlaceholder: "Buscar por #, referência, empresa, responsável…",
     emptyMessage: "Nenhuma linha encontrada.",

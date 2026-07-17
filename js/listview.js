@@ -131,7 +131,8 @@ export class ListView {
 
     const p = this._load();
     this.busca = "";
-    this.colSel = this._setsFromArrays(p?.colSel);   // {dim: Set}
+    // initialColSel (ex.: drill vindo do Dashboard) tem precedencia sobre o estado salvo
+    this.colSel = this._setsFromArrays(opts.initialColSel || p?.colSel);   // {dim: Set}
     this.dateSel = p?.dateSel ? { ...p.dateSel } : {}; // {dim: {de,ate}}
     this.sort = p?.sort || null;
     this.groupBy = p?.groupBy ?? this.initialGroupBy ?? null;
