@@ -1,8 +1,11 @@
-import { colName, escapeHtml, getStatusOptions, statusClassFor } from "./util.js";
+import { colName, escapeHtml, getStatusOptions, statusClassFor, toast } from "./util.js";
 
 const ROWHEAD_W = 46;
 const DEFAULT_COL_W = 124;
 const ROW_H = 26;
+// teto do crescimento automatico da aba (ver _growTo)
+const MAX_ROWS = 5000;
+const MAX_COLS = 200;
 
 export class Grid {
   /* container: elemento .grid-scroll
@@ -472,9 +475,17 @@ export class Grid {
     const grid = lines.map((line) => line.split("\t"));
 
     const { r1, r2, c1, c2 } = this.selRange();
+
+    // 1 celula copiada para uma selecao de varias -> preenche a selecao inteira (estilo Excel).
+    // Util para converter um intervalo de celulas "normais" em celulas de lista de uma vez.
+    const fill = grid.length === 1 && grid[0].length === 1 && (r1 !== r2 || c1 !== c2);
+    // a aba cresce sozinha p/ caber a colagem, senao o excedente sumiria calado.
+    const wide = grid.reduce((m, cols) => Math.max(m, cols.length), 0);
+    const grew = this._growTo(fill ? r2 : r1 + grid.length - 1, fill ? c2 : c1 + wide - 1);
+
     const list = [];
     const put = (rr, cc, val, si, sj) => {
-      if (rr > this.sheet.row_count || cc > this.sheet.col_count) return;
+      if (rr > this.sheet.row_count || cc > this.sheet.col_count) return;   // so no teto do _growTo
       const rec = this.get(rr, cc);
       const src = internal && this._clipCells[si] && this._clipCells[si][sj];
       list.push({ r: rr, c: cc, state: {
@@ -485,15 +496,37 @@ export class Grid {
       } });
     };
 
-    // 1 celula copiada para uma selecao de varias -> preenche a selecao inteira (estilo Excel).
-    // Util para converter um intervalo de celulas "normais" em celulas de lista de uma vez.
-    if (grid.length === 1 && grid[0].length === 1 && (r1 !== r2 || c1 !== c2)) {
+    if (fill) {
       for (let r = r1; r <= r2; r++)
         for (let c = c1; c <= c2; c++) put(r, c, grid[0][0], 0, 0);
     } else {
       grid.forEach((cols, i) => cols.forEach((val, j) => put(r1 + i, c1 + j, val, i, j)));
     }
-    if (list.length) this._writeCells(list);
+    // cresceu -> render completo, que e quem desenha as linhas/colunas novas.
+    if (list.length) this._writeCells(list, { rerender: grew });
+  }
+
+  /* Cresce a aba p/ caber uma colagem maior que ela. As celulas sao esparsas,
+     entao basta subir os contadores -- insert_row so serve p/ inserir no meio e
+     empurrar o resto. O teto existe porque render() monta a tabela inteira de uma
+     vez (sem virtualizacao): um clipboard gigante travaria a aba.
+     Retorna true se cresceu. Nunca trunca em silencio. */
+  _growTo(needR, needC) {
+    const addR = Math.max(0, Math.min(needR, MAX_ROWS) - this.sheet.row_count);
+    const addC = Math.max(0, Math.min(needC, MAX_COLS) - this.sheet.col_count);
+    if (addR || addC) {
+      const patch = {};
+      if (addR) patch.row_count = this.sheet.row_count += addR;
+      if (addC) patch.col_count = this.sheet.col_count += addC;
+      this.actions.setSheet(patch);
+      const parts = [];
+      if (addR) parts.push(addR + (addR > 1 ? " linhas" : " linha"));
+      if (addC) parts.push(addC + (addC > 1 ? " colunas" : " coluna"));
+      toast(parts.join(" e ") + (addR + addC > 1 ? " adicionadas" : " adicionada"));
+    }
+    if (needR > MAX_ROWS || needC > MAX_COLS)
+      toast(`Colagem truncada: a aba vai ate ${MAX_ROWS} linhas e ${MAX_COLS} colunas.`, "err");
+    return addR > 0 || addC > 0;
   }
 
   /* ---------------- formatacao ---------------- */
