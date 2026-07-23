@@ -48,7 +48,11 @@ const FILTER_DIMS = [
   { key: "segmento", label: "Segmento", acc: (it) => txt(it.segmento) },
   { key: "empresa", label: "Empresa", acc: (it) => txt(it.empresa) },
   { key: "grupo", label: "Grupo", acc: (it) => txt(it.grupo) },
+  { key: "area_responsavel", label: "Área", acc: (it) => txt(it.area_responsavel) },
 ];
+/* dimensão dos 3 gráficos de recorte (Conclusão / Pendências x Prazo / Atraso).
+   Alternável na faixa de filtros; padrão = Área. */
+const DIMS = { area: { key: "area_responsavel", label: "Área" }, grupo: { key: "grupo", label: "Grupo" } };
 /* os 3 status de prazo — sempre exibidos (mesmo zerados), p/ largura estável.
    Paleta própria (azul/âmbar/cinza) para não confundir com o Status Geral. */
 const PRAZOS = [["N/A", "na"], ["No Prazo", "np"], ["Atrasado", "atr"]];
@@ -70,7 +74,7 @@ export function aggregate(items, hoje = new Date()) {
   const conclPrazo = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
   const pendPrazo = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
   const prazoTot = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
-  const emp = new Map(), grp = new Map(), setor = new Map(), ref = new Map();
+  const emp = new Map(), grp = new Map(), setor = new Map(), ref = new Map(), area = new Map();
   const ens = (m, k) => { const key = txt(k) || "(vazio)"; let o = m.get(key); if (!o) { o = { label: key, total: 0, concl: 0, pend: 0, np: 0, atr: 0, na: 0, aSoma: 0, aN: 0 }; m.set(key, o); } return o; };
 
   for (const it of items) {
@@ -79,7 +83,7 @@ export function aggregate(items, hoje = new Date()) {
     geral[sG]++;
     prazoTot[sP]++;
     (sG === "Concluído" ? conclPrazo : pendPrazo)[sP]++;
-    for (const [m, k] of [[emp, it.empresa], [grp, it.grupo], [setor, it.segmento], [ref, it.referencia]]) {
+    for (const [m, k] of [[emp, it.empresa], [grp, it.grupo], [setor, it.segmento], [ref, it.referencia], [area, it.area_responsavel]]) {
       const o = ens(m, k); o.total++;
       if (sG === "Concluído") o.concl++; else o.pend++;
       if (sP === "No Prazo") o.np++; else if (sP === "Atrasado") o.atr++; else o.na++;
@@ -92,7 +96,7 @@ export function aggregate(items, hoje = new Date()) {
   return {
     total, se, geral, conclPrazo, pendPrazo, prazoTot,
     pctConcl: pctOf(geral["Concluído"], total), pctPend: pctOf(geral["Pendente"], total),
-    empresas: arr(emp), grupos: arr(grp), setores: arr(setor), referencias: arr(ref),
+    empresas: arr(emp), grupos: arr(grp), setores: arr(setor), referencias: arr(ref), areas: arr(area),
   };
 }
 
@@ -196,7 +200,7 @@ function card(title, cls, ...body) {
 /* ---------- render ---------- */
 export function buildDashboard(project, allItems, opts = {}) {
   const root = h("div", { class: "dash" });
-  const state = { filters: {} };
+  const state = { filters: {}, dim: "area" };   /* padrão: gráficos por Área responsável */
   const values = {};
   for (const d of FILTER_DIMS) values[d.key] = [...new Set(allItems.map(d.acc).filter(Boolean))].sort((x, y) => x.localeCompare(y, "pt", { numeric: true }));
   const ctx = { state, onDrill: opts.onDrill || null };
@@ -211,8 +215,10 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
   const per = periodo(items);
 
   const empresasT = [...a.empresas].sort((x, y) => y.total - x.total);
-  const gruposAlpha = [...a.grupos].sort((x, y) => x.label.localeCompare(y.label, "pt"));
-  const gruposRev = [...gruposAlpha].reverse();
+  /* dimensão escolhida no alternador (Área/Grupo) — alimenta as 3 cartas de recorte */
+  const dim = DIMS[state.dim] || DIMS.area;
+  const dimAlpha = [...(state.dim === "grupo" ? a.grupos : a.areas)].sort((x, y) => x.label.localeCompare(y.label, "pt"));
+  const dimRev = [...dimAlpha].reverse();
   const setoresT = [...a.setores].sort((x, y) => y.total - x.total);
   const refsT = [...a.referencias].sort((x, y) => y.total - x.total);
 
@@ -239,7 +245,20 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
       });
     }));
 
-  const filtros = h("div", { class: "t-filters" }, ...FILTER_DIMS.map((d) =>
+  /* alternador da dimensão dos gráficos (à esquerda das caixas de filtro) */
+  const dimToggle = h("div", { class: "t-fwrap" },
+    h("span", { class: "t-flegend" }, "Gráficos por"),
+    h("div", { class: "t-seg", role: "group", "aria-label": "Dimensão dos gráficos" },
+      ...["area", "grupo"].map((k) => {
+        const on = state.dim === k;
+        return h("button", {
+          class: "t-segbtn" + (on ? " on" : ""), "aria-pressed": String(on),
+          title: `Ver os gráficos de recorte por ${DIMS[k].label}`,
+          onClick: () => { if (!on) { state.dim = k; rerender(); } },
+        }, DIMS[k].label);
+      })));
+
+  const filtros = h("div", { class: "t-filters" }, dimToggle, ...FILTER_DIMS.map((d) =>
     h("div", { class: "t-fwrap" },
       h("span", { class: "t-flegend" }, d.label),
       h("button", {
@@ -312,8 +331,8 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
 
   /* ---- 5 cartas ---- */
   const empMaxPr = Math.max(1, ...empresasT.map((o) => o.np + o.atr + o.na));
-  const grpMaxPr = Math.max(1, ...gruposAlpha.map((o) => o.np + o.atr + o.na));
-  const grpMaxAtr = Math.max(1, ...gruposRev.map((o) => o.media));
+  const dimMaxPr = Math.max(1, ...dimAlpha.map((o) => o.np + o.atr + o.na));
+  const dimMaxAtr = Math.max(1, ...dimRev.map((o) => o.media));
   const prazoLeg = () => legend([
     ["np", "No Prazo", a.prazoTot["No Prazo"], { c_prazo: ["No Prazo"] }],
     ["atr", "Atrasado", a.prazoTot.Atrasado, { c_prazo: ["Atrasado"] }],
@@ -322,10 +341,10 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
 
   root.replaceChildren(header, h("div", { class: "t-cards" },
     card("% Conclusão por Empresa", "", ...empresasT.map((o) => pctRow(o, ctx, "empresa"))),
-    card("% Conclusão por Grupo", "", ...gruposAlpha.map((o) => pctRow(o, ctx, "grupo"))),
+    card(`% Conclusão por ${dim.label}`, "", ...dimAlpha.map((o) => pctRow(o, ctx, dim.key))),
     card("Pendências x Prazo por Empresas", "coral", prazoLeg(), ...empresasT.map((o) => prazoRow(o, empMaxPr, ctx, "empresa"))),
-    card("Pendências x Prazo por Grupo", "coral", prazoLeg(), ...gruposAlpha.map((o) => prazoRow(o, grpMaxPr, ctx, "grupo"))),
-    card("Média de Dias de Atraso por Grupo", "", ...gruposRev.map((o) => atrasoRow(o, grpMaxAtr, ctx, "grupo")))));
+    card(`Pendências x Prazo por ${dim.label}`, "coral", prazoLeg(), ...dimAlpha.map((o) => prazoRow(o, dimMaxPr, ctx, dim.key))),
+    card(`Média de Dias de Atraso por ${dim.label}`, "", ...dimRev.map((o) => atrasoRow(o, dimMaxAtr, ctx, dim.key)))));
 }
 
 /* ---------- caixas de filtro (combobox multi-seleção) ---------- */

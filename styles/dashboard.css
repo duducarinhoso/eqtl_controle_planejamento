@@ -59,6 +59,12 @@
 .dash .t-filter:hover, .dash .t-filter.open{ background:var(--hover); border-color:var(--t-teal); }
 .dash .t-filter.on{ border-color:var(--t-teal); box-shadow:inset 0 0 0 1px var(--t-teal); }
 .dash .t-filter.on .t-flabel{ color:var(--t-teal); font-weight:600; }
+/* alternador Área/Grupo — muda a dimensão das 3 cartas de recorte */
+.dash .t-seg{ display:inline-flex; height:26px; border:1px solid var(--border); border-radius:7px; background:var(--card-bg); overflow:hidden; }
+.dash .t-segbtn{ border:0; background:none; font:inherit; font-size:11px; color:var(--text-muted); padding:0 10px; cursor:pointer; }
+.dash .t-segbtn + .t-segbtn{ border-left:1px solid var(--border); }
+.dash .t-segbtn:hover{ background:var(--hover); color:var(--text); }
+.dash .t-segbtn.on{ background:var(--t-teal); color:#fff; font-weight:600; }
 .dash .t-fic{ display:inline-flex; width:14px; height:14px; color:var(--t-teal); flex:none; } .dash .t-fic svg{ width:14px; height:14px; }
 .dash .t-flabel{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:130px; }
 .dash .t-fchv{ display:inline-flex; width:12px; height:12px; color:var(--text-muted); flex:none; } .dash .t-fchv svg{ width:12px; height:12px; }
