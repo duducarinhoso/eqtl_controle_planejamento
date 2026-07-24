@@ -29,5 +29,8 @@ tools/
 # Comunicados internos (Teams etc.): repo e publico → manter LOCAL
 modelos/arquivos/*.pptx
 
+# Backups locais do banco (dump de dados de producao) — repo e publico → NUNCA versionar
+_backup_local/
+
 # Dependências (não usamos, mas por segurança)
 node_modules/
