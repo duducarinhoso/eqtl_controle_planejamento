@@ -537,6 +537,10 @@ table.grid th, table.grid td {
 .diff-row .new { color: var(--status-green); font-weight: 600; white-space: normal; word-break: break-word; }
 .modal.wide { width: min(980px, 95vw); }
 .modal .scrollbody { max-height: 66vh; overflow-y: auto; margin: 8px -4px; padding: 0 4px; }
+/* reimport da tabela estruturada: diff por ITEM (não por célula) — rótulo mais
+   largo que "B12" (nome de campo, ex.: "Descrição no Client portal"). */
+.diff-row.wide-label { grid-template-columns: 24px 190px 1fr 16px 1fr; }
+.diff-row.diff-field { padding-left: 30px; color: var(--on-surface-variant); }
 
 /* clicavel no historico por aba */
 .hist-item.clickable { cursor: pointer; border-radius: var(--r-sm); }

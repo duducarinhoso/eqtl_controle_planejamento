@@ -2,10 +2,18 @@
    Detecta a aba pelos cabecalhos (linha de header) e devolve linhas tipadas
    nos campos de PLANNING_FIELDS. Ignora as 4 colunas calculadas do arquivo.
 
+   Aceita tanto o modelo de carga ("Baixar modelo", so as 13 colunas de entrada)
+   quanto o arquivo que sai do proprio "Exportar (Excel)" da Base Gerencial (as
+   13 + as 4 calculadas: Status de entrega/Geral/Prazo, Dias de atraso) — o
+   fluxo exportar → editar no Excel → reimportar precisa funcionar sem que o
+   usuario precise apagar essas colunas antes. As calculadas nao entram em
+   HEADER_MAP, entao ficam de fora de colMap e sao ignoradas silenciosamente
+   (nunca viram campo pra gravar).
+
    Usa SheetJS (getXLSX), nao ExcelJS: alem de mais leve (so precisamos de VALORES
    + datas, nao formatacao), o ExcelJS trava neste arquivo real (slicers + Excel
    Table). SheetJS le o mesmo arquivo em ~0.5s. */
-import { getXLSX } from "./excel.js";
+import { getXLSX, getExcelJS, downloadBlob } from "./excel.js";
 
 /* Cabecalho do Excel (normalizado) -> campo. Normalizamos o texto (minusculo,
    sem acento, colapsa espacos) para casar apesar de variacoes de grafia. */
@@ -27,7 +35,9 @@ const HEADER_MAP = {
 const DATE_FIELDS = new Set(["data_base", "prazo_recebimento", "entrega_efetiva"]); // -> YYYY-MM-DD
 const TS_FIELDS = new Set(["data_solicitacao"]);                                     // -> ISO timestamp
 // Minimo de campos-chave para reconhecer a aba como valida (o modelo Lista de pedidos).
-const REQUIRED = ["item_num", "referencia", "grupo", "empresa", "status", "prazo_recebimento"];
+// "status" NAO e obrigatoria: e so um marcador livre (ex.: "N/A"), fica lida se
+// a coluna existir, mas a aba e reconhecida mesmo sem ela.
+const REQUIRED = ["item_num", "referencia", "grupo", "empresa", "prazo_recebimento"];
 
 function norm(s) {
   return String(s ?? "").trim().toLowerCase()
@@ -108,4 +118,60 @@ export async function parseTableXlsx(file) {
     }
   }
   return { sheetName: name, rows: out };
+}
+
+/* Cabeçalho legível (com acentos) + regra de preenchimento, na mesma ordem de
+   PLANNING_FIELDS/HEADER_MAP. "Obrigatório" espelha REQUIRED (fonte única). */
+const TEMPLATE_COLS = [
+  { field: "item_num", header: "#", rule: "Texto ou número curto (ex.: 1, 2, 3.1). Linhas sem \"#\" são ignoradas na carga. Único junto com Referência+Grupo+Empresa." },
+  { field: "referencia", header: "Referência", rule: "Texto livre (ex.: 2ITR26)." },
+  { field: "grupo", header: "Grupo", rule: "Texto livre (ex.: Ativos, Faturamento)." },
+  { field: "descricao", header: "Descrição no Client Portal", rule: "Texto livre." },
+  { field: "empresa", header: "Empresa", rule: "Texto livre (ex.: EQTL GO)." },
+  { field: "segmento", header: "Segmento", rule: "Texto livre (ex.: Distribuição, Saneamento)." },
+  { field: "data_base", header: "Data-base", rule: "Data (dd/mm/aaaa)." },
+  { field: "status", header: "Status", rule: "Texto livre. Use \"N/A\" para itens sem prazo aplicável; qualquer outro valor entra no fluxo normal (calculado pelas datas)." },
+  { field: "data_solicitacao", header: "Data solicitação", rule: "Data (dd/mm/aaaa)." },
+  { field: "prazo_recebimento", header: "Prazo recebimento", rule: "Data (dd/mm/aaaa)." },
+  { field: "area_responsavel", header: "Área responsável", rule: "Texto livre." },
+  { field: "responsavel", header: "Responsável", rule: "Texto livre." },
+  { field: "entrega_efetiva", header: "Entrega efetiva", rule: "Data (dd/mm/aaaa). Deixe em branco enquanto o item estiver pendente." },
+];
+const TEAL = "FF12A0A8";
+
+/* Gera o modelo padrão de carga: aba "Preencher" (cabeçalho fixo, em branco) +
+   aba "Orientações" (regra de preenchimento por coluna). Mesma estrutura que
+   parseTableXlsx espera — padroniza a reimportação. */
+export async function downloadTemplateXlsx(filename = "modelo-lista-de-pedidos.xlsx") {
+  const ExcelJS = await getExcelJS();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Controle de Solicitações";
+
+  const wsFill = wb.addWorksheet("Preencher");
+  const head1 = wsFill.addRow(TEMPLATE_COLS.map((c) => c.header));
+  head1.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TEAL } };
+    cell.alignment = { vertical: "middle" };
+  });
+  wsFill.views = [{ state: "frozen", ySplit: 1 }];
+  TEMPLATE_COLS.forEach((c, i) => { wsFill.getColumn(i + 1).width = Math.max(12, c.header.length + 4); });
+
+  const wsOrient = wb.addWorksheet("Orientações");
+  const head2 = wsOrient.addRow(["Coluna", "Obrigatório", "Formato / regra de preenchimento"]);
+  head2.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TEAL } };
+    cell.alignment = { vertical: "middle" };
+  });
+  for (const c of TEMPLATE_COLS) {
+    const row = wsOrient.addRow([c.header, REQUIRED.includes(c.field) ? "Sim" : "Não", c.rule]);
+    row.getCell(3).alignment = { wrapText: true, vertical: "top" };
+  }
+  wsOrient.getColumn(1).width = 26;
+  wsOrient.getColumn(2).width = 12;
+  wsOrient.getColumn(3).width = 72;
+
+  const buf = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);
 }

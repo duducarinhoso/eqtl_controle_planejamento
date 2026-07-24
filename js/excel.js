@@ -318,7 +318,7 @@ function toARGB(hex) {
   return "FF" + hex.toUpperCase();
 }
 function sanitizeName(n) { return (String(n).replace(/[\\/?*\[\]:]/g, "_").slice(0, 31)) || "Aba"; }
-function downloadBlob(blob, name) {
+export function downloadBlob(blob, name) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click();

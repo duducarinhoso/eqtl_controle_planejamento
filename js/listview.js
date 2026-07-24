@@ -114,6 +114,10 @@ export class ListView {
   constructor(container, opts = {}) {
     this.container = container;
     this.columns = opts.columns || [];
+    /* colunas do EXPORT podem ser mais amplas que as da grade — ex.: campos que a
+       app oculta da visualização mas que precisam voltar no arquivo pra reimportar
+       sem apagar dado (upsert grava null no que não vier na planilha). */
+    this.exportColumns = opts.exportColumns || this.columns;
     this.rows = opts.rows || [];
     this.selectable = !!opts.selectable;
     this.onRowClick = opts.onRowClick || null;
@@ -234,16 +238,42 @@ export class ListView {
   _pushRows() { const disp = this._displayRows(); this.grid?.setRows(disp); this.grid?.setActiveFilterKeys(this._activeFilterKeys()); }
   _rerender() { this._pushRows(); this._renderToolbar(); }
 
-  /* ---- export (SheetJS) ---- */
+  /* ---- export (SheetJS) ----
+     Colunas de data (dateValue) NÃO podem sair como o texto bonito do cellText
+     (ex.: "10/07/2026 sex") — isso não reimporta como data (new Date(texto) é
+     Invalid Date), o que zerava a coluna inteira no reimport.
+     Também NÃO dá pra passar um objeto Date cru pro SheetJS serializar: o
+     writer converte via getTime(), e um Date de meia-noite LOCAL sofre um
+     arredondamento de ponto flutuante que empurra a data pro dia anterior
+     (bug observado e confirmado em teste: ~28s de erro, vira "19/07" em vez
+     de "20/07"). Por isso o serial do Excel é calculado aqui à mão (inteiro
+     exato, base UTC nos dois lados — sem ambiguidade de fuso nem de arredon-
+     damento) e a célula é setada direto como {t:'n', v:serial, z:'dd/mm/yyyy'}. */
+  static _excelSerial(y, m, d) { return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000); }
+  _exportCell(c, r) {
+    if (c.dateValue) return { isDate: true, value: c.dateValue(r) };
+    return c.cellText ? c.cellText(r) : (c.filterValue ? c.filterValue(r) : "");
+  }
   async _exportar() {
     const sel = this._displayRows().filter((r) => this.selectedIds.has(r.id));
     const alvo = sel.length ? sel : this._displayRows();
     if (!alvo.length) return;
     const XLSX = await getXLSX();
-    const heads = this.columns.map((c) => (typeof c.header === "string" ? c.header : colLabel(c)));
+    const heads = this.exportColumns.map((c) => (typeof c.header === "string" ? c.header : colLabel(c)));
+    // placeholder "" nas colunas de data — a célula real é setada abaixo
     const aoa = [heads];
-    for (const r of alvo) aoa.push(this.columns.map((c) => (c.cellText ? c.cellText(r) : (c.filterValue ? c.filterValue(r) : ""))));
+    for (const r of alvo) aoa.push(this.exportColumns.map((c) => { const v = this._exportCell(c, r); return v && v.isDate ? "" : v; }));
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    this.exportColumns.forEach((c, ci) => {
+      if (!c.dateValue) return;
+      alvo.forEach((r, ri) => {
+        const iso = c.dateValue(r);
+        if (!iso) return;   // sem data -> mantém a célula vazia (placeholder)
+        const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+        if (!y || !m || !d) return;
+        ws[XLSX.utils.encode_cell({ r: ri + 1, c: ci })] = { t: "n", v: ListView._excelSerial(y, m, d), z: "dd/mm/yyyy" };
+      });
+    });
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Dados");
     XLSX.writeFile(wb, this.csvFilename.endsWith(".xlsx") ? this.csvFilename : this.csvFilename + ".xlsx");
   }
