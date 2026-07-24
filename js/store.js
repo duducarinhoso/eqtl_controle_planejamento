@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { supabase, CONFIG } from "./supabase.js";
 import { detectLegend } from "./parser.js";
+import { statusEntrega } from "./calc.js";
 
 const DEFAULT_PASSWORD = "Inovacao#2026";
 
@@ -222,6 +223,25 @@ export async function loadProjectsStatusSummary() {
   const m = new Map();
   for (const r of rows) addCount(m, normStatus(r.value), 1);
   out.set("__all__", m);
+  return out;
+}
+
+/* Resumo de "Status de entrega" por projeto TABELA (para as tags na capa).
+   Deriva no cliente (calc.js) a partir das colunas mínimas de planning_items.
+   -> Map(project_id -> Map(rótulo -> qtd)). Vazio se a tabela não existir. */
+export async function loadPlanningStatusSummary() {
+  const out = new Map();
+  if (!(await planningAvailable())) return out;
+  const { data, error } = await supabase.from("planning_items")
+    .select("project_id,status,prazo_recebimento,entrega_efetiva");
+  if (error || !data) return out;
+  const hoje = new Date();
+  for (const r of data) {
+    const lab = statusEntrega(r, hoje);
+    if (!out.has(r.project_id)) out.set(r.project_id, new Map());
+    const m = out.get(r.project_id);
+    m.set(lab, (m.get(lab) || 0) + 1);
+  }
   return out;
 }
 

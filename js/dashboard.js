@@ -39,8 +39,8 @@ function periodo(items) {
 
 /* status de entrega → cor da tag (faixa do topo; também são filtros) */
 const SE_TAGS = [
-  ["Em andamento", "te-ea"], ["Concluído no prazo", "te-cp"], ["Concluído com atraso", "te-ca"],
-  ["Pendente", "te-pe"], ["N/A", "te-na"],
+  ["Pendente no prazo", "te-ea"], ["Pendente com atraso", "te-pe"],
+  ["Concluído no prazo", "te-cp"], ["Concluído com atraso", "te-ca"], ["N/A", "te-na"],
 ];
 /* caixas de filtro (dimensão → coluna da Base Gerencial, mesmo nome) */
 const FILTER_DIMS = [
@@ -69,13 +69,13 @@ function applyFilters(allItems, f, hoje = new Date()) {
 
 /* ---------- agregação (client-side) ---------- */
 export function aggregate(items, hoje = new Date()) {
-  const se = { "Em andamento": 0, "Pendente": 0, "Concluído no prazo": 0, "Concluído com atraso": 0, "N/A": 0 };
+  const se = { "Pendente no prazo": 0, "Pendente com atraso": 0, "Concluído no prazo": 0, "Concluído com atraso": 0, "N/A": 0, "Pendente": 0 };
   const geral = { "Concluído": 0, "Pendente": 0 };
   const conclPrazo = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
   const pendPrazo = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
   const prazoTot = { "No Prazo": 0, Atrasado: 0, "N/A": 0 };
   const emp = new Map(), grp = new Map(), setor = new Map(), ref = new Map(), area = new Map();
-  const ens = (m, k) => { const key = txt(k) || "(vazio)"; let o = m.get(key); if (!o) { o = { label: key, total: 0, concl: 0, pend: 0, np: 0, atr: 0, na: 0, aSoma: 0, aN: 0 }; m.set(key, o); } return o; };
+  const ens = (m, k) => { const key = txt(k) || "(vazio)"; let o = m.get(key); if (!o) { o = { label: key, total: 0, concl: 0, pend: 0, np: 0, atr: 0, na: 0, pnp: 0, patr: 0, aSoma: 0, aN: 0 }; m.set(key, o); } return o; };
 
   for (const it of items) {
     const sE = statusEntrega(it, hoje), sG = statusGeral(it, hoje), sP = statusPrazo(it, hoje), da = diasAtraso(it, hoje);
@@ -87,6 +87,8 @@ export function aggregate(items, hoje = new Date()) {
       const o = ens(m, k); o.total++;
       if (sG === "Concluído") o.concl++; else o.pend++;
       if (sP === "No Prazo") o.np++; else if (sP === "Atrasado") o.atr++; else o.na++;
+      /* Pendências x Prazo: só os pendentes, quebrados por prazo (No Prazo/Atrasado) */
+      if (sG === "Pendente") { if (sP === "No Prazo") o.pnp++; else if (sP === "Atrasado") o.patr++; }
       if (da != null && da > 0) { o.aSoma += da; o.aN++; }
     }
   }
@@ -152,7 +154,9 @@ function legend(pairs, ctx) {
 function sgChart(rows, ctx, dimKey, limit) {
   const wrap = h("div", { class: "t-sgchart" });
   rows.slice(0, limit).forEach((s) => {
-    const bar = (pct, n, cls, lab, gv) => h("div", Object.assign({ class: "t-sgbar drillable " + cls, style: { height: Math.max(2, Math.round(pct / 100 * 40)) + "px" } },
+    /* altura em % (não px fixo) — a barra escala com a altura real do card,
+       que varia conforme fonte/zoom/conteúdo dos blocos vizinhos. */
+    const bar = (pct, n, cls, lab, gv) => h("div", Object.assign({ class: "t-sgbar drillable " + cls, style: { height: `max(2px, ${pct}%)` } },
       clickable(ctx, `${s.label} · ${lab}: ${n} de ${s.total} (${pct}%)`, { [dimKey]: [s.label], c_geral: [gv] })),
       h("span", { class: "t-sgpct" }, pct + "%"));
     wrap.appendChild(h("div", { class: "t-sggroup" },
@@ -165,31 +169,42 @@ function pctRow(o, ctx, dimKey) {
   return h("div", Object.assign({ class: "t-pctrow drillable" },
     clickable(ctx, `${o.label}: ${o.concl} de ${o.total} concluído(s) — ${o.pctConcl}%`, { [dimKey]: [o.label] })),
     h("span", { class: "t-plab" }, o.label),
-    h("div", { class: "t-ptrack" },
-      h("span", { class: "t-pfill", style: { width: Math.min(100, o.pctConcl) + "%" } }),
+    /* wrapper: trilho (recorta o preenchimento reto) + chip por cima, fora do overflow */
+    h("div", { class: "t-pbar" },
+      h("div", { class: "t-ptrack" }, h("span", { class: "t-pfill", style: { width: Math.min(100, o.pctConcl) + "%" } })),
       h("span", { class: "t-pval tnum" }, o.pctConcl + "%")));
 }
-/* cada segmento do empilhado filtra só o seu status (clique individual) */
+/* Pendências x Prazo: só itens com Status Geral = Pendente, quebrados por prazo
+   (No Prazo / Atrasado). Cada segmento filtra o seu status (clique individual). */
 function prazoRow(o, max, ctx, dimKey) {
   const track = h("div", { class: "t-prtrack" });
   const seg = (v, cls, status) => {
     if (v <= 0) return;
     track.appendChild(h("span", Object.assign({ class: "t-prseg " + cls, style: { width: (v / max * 100) + "%" } },
-      clickable(ctx, `${o.label} · ${status}: ${v} de ${o.total} (${pctOf(v, o.total)}%)`, { [dimKey]: [o.label], c_prazo: [status] }))));
+      clickable(ctx, `${o.label} · ${status}: ${v} de ${o.pend} pendente(s) (${pctOf(v, o.pend)}%)`, { [dimKey]: [o.label], c_geral: ["Pendente"], c_prazo: [status] }))));
   };
-  seg(o.np, "np", "No Prazo"); seg(o.atr, "atr", "Atrasado"); seg(o.na, "na", "N/A");
-  const tip = `${o.label}: ${o.total} item(ns) — No Prazo ${o.np} (${pctOf(o.np, o.total)}%) · Atrasado ${o.atr} (${pctOf(o.atr, o.total)}%) · N/A ${o.na} (${pctOf(o.na, o.total)}%)`;
-  return h("div", Object.assign({ class: "t-prrow drillable" }, clickable(ctx, tip, { [dimKey]: [o.label] })),
-    h("span", { class: "t-plab" }, o.label), track);
+  seg(o.pnp, "np", "No Prazo"); seg(o.patr, "atr", "Atrasado");
+  /* rótulo fixo à direita (mesmo estilo dos outros gráficos): No Prazo / Atrasado,
+     cada número na cor da sua legenda. Ex.: só no prazo → "2"; ambos → "2/7". */
+  const val = h("div", { class: "t-prval tnum" });
+  if (o.pnp > 0) val.appendChild(h("span", { class: "np" }, String(o.pnp)));
+  if (o.pnp > 0 && o.patr > 0) val.appendChild(h("span", { class: "sep" }, "/"));
+  if (o.patr > 0) val.appendChild(h("span", { class: "atr" }, String(o.patr)));
+  const bar = h("div", { class: "t-prbar" }, track, (o.pnp + o.patr > 0) ? val : null);
+  const tip = `${o.label}: ${o.pend} pendente(s) — No Prazo ${o.pnp} (${pctOf(o.pnp, o.pend)}%) · Atrasado ${o.patr} (${pctOf(o.patr, o.pend)}%)`;
+  return h("div", Object.assign({ class: "t-prrow drillable" }, clickable(ctx, tip, { [dimKey]: [o.label], c_geral: ["Pendente"] })),
+    h("span", { class: "t-plab" }, o.label), bar);
 }
+/* mesma distribuição de largura das outras cartas (rótulo minmax(0,44%) + barra) */
 function atrasoRow(o, max, ctx, dimKey) {
   const tip = o.media > 0
     ? `${o.label}: atraso médio ${fmt1(o.media)} dia(s) — ${o.aN} de ${o.total} item(ns) em atraso (${pctOf(o.aN, o.total)}%)`
     : `${o.label}: sem atraso — 0 de ${o.total} item(ns)`;
   return h("div", Object.assign({ class: "t-arrow drillable" + (o.media > 0 ? "" : " zero") }, clickable(ctx, tip, { [dimKey]: [o.label] })),
-    h("span", { class: "t-arlab" }, o.label),
-    h("div", { class: "t-artrack" }, o.media > 0 ? h("span", { class: "t-arfill", style: { width: (o.media / max * 100) + "%" } }) : null),
-    h("span", { class: "t-arval tnum" }, fmt1(o.media)));
+    h("span", { class: "t-plab" }, o.label),
+    h("div", { class: "t-arbar" },
+      h("div", { class: "t-artrack" }, o.media > 0 ? h("span", { class: "t-arfill", style: { width: (o.media / max * 100) + "%" } }) : null),
+      h("span", { class: "t-arval tnum" }, fmt1(o.media))));
 }
 function card(title, cls, ...body) {
   return h("section", { class: "t-card" },
@@ -239,8 +254,9 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
     ...SE_TAGS.map(([lab, cls]) => {
       const on = !!state.filters.entrega?.has(lab);
       return tag(lab, cls, aTags.se[lab] || 0, on, () => {
-        if (on) delete state.filters.entrega;          /* clicar de novo volta para "Todas" */
-        else state.filters.entrega = new Set([lab]);   /* seleção individual */
+        const set = new Set(state.filters.entrega || []);   /* multi-seleção: alterna a tag */
+        if (set.has(lab)) set.delete(lab); else set.add(lab);
+        if (set.size) state.filters.entrega = set; else delete state.filters.entrega;
         rerender();
       });
     }));
@@ -330,21 +346,24 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
     h("div", { class: "t-headmain" }, total, conc, pend, sgeral, refs, matraso));
 
   /* ---- 5 cartas ---- */
-  const empMaxPr = Math.max(1, ...empresasT.map((o) => o.np + o.atr + o.na));
-  const dimMaxPr = Math.max(1, ...dimAlpha.map((o) => o.np + o.atr + o.na));
-  const dimMaxAtr = Math.max(1, ...dimRev.map((o) => o.media));
+  /* nas cartas por Área/Grupo, só linhas com ocorrência (não poluir com barras vazias) */
+  const dimPend = dimAlpha.filter((o) => o.pnp + o.patr > 0);
+  const dimAtraso = dimRev.filter((o) => o.media > 0);
+  const empMaxPr = Math.max(1, ...empresasT.map((o) => o.pnp + o.patr));
+  const dimMaxPr = Math.max(1, ...dimPend.map((o) => o.pnp + o.patr));
+  const dimMaxAtr = Math.max(1, ...dimAtraso.map((o) => o.media));
+  /* legenda dos gráficos de pendência: só pendentes, No Prazo x Atrasado (sem N/A) */
   const prazoLeg = () => legend([
-    ["np", "No Prazo", a.prazoTot["No Prazo"], { c_prazo: ["No Prazo"] }],
-    ["atr", "Atrasado", a.prazoTot.Atrasado, { c_prazo: ["Atrasado"] }],
-    ["na", "N/A", a.prazoTot["N/A"], { c_prazo: ["N/A"] }],
+    ["np", "No Prazo", a.pendPrazo["No Prazo"], { c_geral: ["Pendente"], c_prazo: ["No Prazo"] }],
+    ["atr", "Atrasado", a.pendPrazo.Atrasado, { c_geral: ["Pendente"], c_prazo: ["Atrasado"] }],
   ], ctx);
 
   root.replaceChildren(header, h("div", { class: "t-cards" },
     card("% Conclusão por Empresa", "", ...empresasT.map((o) => pctRow(o, ctx, "empresa"))),
-    card(`% Conclusão por ${dim.label}`, "", ...dimAlpha.map((o) => pctRow(o, ctx, dim.key))),
     card("Pendências x Prazo por Empresas", "coral", prazoLeg(), ...empresasT.map((o) => prazoRow(o, empMaxPr, ctx, "empresa"))),
-    card(`Pendências x Prazo por ${dim.label}`, "coral", prazoLeg(), ...dimAlpha.map((o) => prazoRow(o, dimMaxPr, ctx, dim.key))),
-    card(`Média de Dias de Atraso por ${dim.label}`, "", ...dimRev.map((o) => atrasoRow(o, dimMaxAtr, ctx, dim.key)))));
+    card(`% Conclusão por ${dim.label}`, "", ...dimAlpha.map((o) => pctRow(o, ctx, dim.key))),
+    card(`Pendências x Prazo por ${dim.label}`, "coral", prazoLeg(), ...dimPend.map((o) => prazoRow(o, dimMaxPr, ctx, dim.key))),
+    card(`Média de Dias de Atraso por ${dim.label}`, "", ...dimAtraso.map((o) => atrasoRow(o, dimMaxAtr, ctx, dim.key)))));
 }
 
 /* ---------- caixas de filtro (combobox multi-seleção) ---------- */

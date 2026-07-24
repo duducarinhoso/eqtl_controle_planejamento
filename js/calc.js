@@ -13,24 +13,28 @@ function parseDay(iso) {
 function diffDays(a, b) { return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); } // a - b (dias)
 function isNA(status) { return String(status || "").trim().toLowerCase().replace("/", "") === "na"; }
 
-/* N — Status de entrega */
+/* N — Status de entrega = junção de Status Geral (Concluído/Pendente) com
+   Status Prazo (no prazo/atraso). Vocabulário padronizado nos dois lados:
+   "Concluído no prazo" / "Concluído com atraso" e "Pendente no prazo" /
+   "Pendente com atraso". N/A não tem prazo → só "N/A". "Pendente" puro só
+   sobra no caso-limite de item pendente sem prazo cadastrado. */
 export function statusEntrega(item, hoje = new Date()) {
   if (isNA(item.status)) return "N/A";
   const prazo = parseDay(item.prazo_recebimento);
   const entrega = parseDay(item.entrega_efetiva);
   if (!entrega) {
     if (!prazo) return "Pendente";
-    return diffDays(hoje, prazo) <= 0 ? "Em andamento" : "Pendente";
+    return diffDays(hoje, prazo) <= 0 ? "Pendente no prazo" : "Pendente com atraso";
   }
   if (!prazo) return "Concluído no prazo";
   return diffDays(prazo, entrega) >= 0 ? "Concluído no prazo" : "Concluído com atraso";
 }
 
 /* O — Status Geral (fiel a =SE(OU(N="Em andamento";N="Pendente");"Pendente";"Concluído")).
-   OBS: por essa fórmula, "N/A" cai em "Concluído" — replicado do Excel. */
+   OBS: por essa fórmula, "N/A" cai em "Concluído" — replicado do Excel.
+   Todo status de entrega pendente começa com "Pendente"; o resto é Concluído. */
 export function statusGeral(item, hoje = new Date()) {
-  const s = statusEntrega(item, hoje);
-  return (s === "Em andamento" || s === "Pendente") ? "Pendente" : "Concluído";
+  return statusEntrega(item, hoje).startsWith("Pendente") ? "Pendente" : "Concluído";
 }
 
 /* P — Status Prazo */
@@ -59,12 +63,13 @@ export function diasAtraso(item, hoje = new Date()) {
 /* Classe do chip (cor) por rótulo de status calculado. */
 export function statusKlass(label) {
   switch (label) {
-    case "Em andamento": return "st-pendente";
-    case "Pendente": return "st-pendente";
+    case "Pendente":
+    case "Pendente no prazo": return "st-pendente";
     case "No Prazo":
     case "Concluído no prazo":
     case "Concluído": return "st-no-prazo";
     case "Atrasado":
+    case "Pendente com atraso":
     case "Concluído com atraso": return "st-com-atraso";
     case "N/A": return "st-na";
     default: return "st-na";

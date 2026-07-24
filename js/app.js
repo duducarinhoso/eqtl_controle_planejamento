@@ -452,8 +452,8 @@ function buildLandingBody() {
 async function loadLanding() {
   const grid = $("#proj-grid"); if (!grid) return;
   grid.innerHTML = '<div class="spinner" style="margin:48px auto"></div>';
-  let projects, summary, lastch;
-  try { [projects, summary, lastch] = await Promise.all([store.listProjects(), store.loadProjectsStatusSummary(), store.loadProjectsLastChange()]); }
+  let projects, summary, lastch, planSummary;
+  try { [projects, summary, lastch, planSummary] = await Promise.all([store.listProjects(), store.loadProjectsStatusSummary(), store.loadProjectsLastChange(), store.loadPlanningStatusSummary().catch(() => new Map())]); }
   catch (e) {
     clear(grid);
     grid.appendChild(h("div", { class: "card", style: { gridColumn: "1 / -1" } },
@@ -463,7 +463,7 @@ async function loadLanding() {
         h("button", { class: "btn btn-ghost btn-sm", onClick: loadLanding }, "Tentar novamente"))));
     return;
   }
-  App._projects = projects; App._summary = summary; App._lastch = lastch;
+  App._projects = projects; App._summary = summary; App._lastch = lastch; App._planSummary = planSummary;
   renderProjectCards(projects, "");
 }
 
@@ -483,13 +483,25 @@ function renderProjectCards(projects, q) {
   list.forEach((p) => grid.appendChild(projectCard(p)));
 }
 
+/* Modelo tabela: mapeia "Status de entrega" para as cores/estilo dos badges da
+   capa (mesma semântica das tags do dashboard) e a ordem de exibição. */
+const SE_BADGE = { "Pendente no prazo": "analise", "Pendente com atraso": "parcial",
+  "Concluído no prazo": "recebido", "Concluído com atraso": "pendente", "Pendente": "analise", "N/A": "na" };
+const SE_ORDER = ["Pendente no prazo", "Pendente com atraso", "Concluído no prazo", "Concluído com atraso", "Pendente", "N/A"];
+
 function projectCard(p) {
-  const sum = (App._summary && (App._summary.get(p.id) || (p.synthetic && App._summary.get("__all__")))) || new Map();
   const chips = h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } });
-  const seen = new Set();
   const badge = (label, n, cls) => h("span", { class: "badge st-" + (cls || "na") }, `${label} · ${n}`);
-  getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(badge(s, n, statusClassFor(s) || "na")); seen.add(s); } });
-  for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(badge(k, n, "na"));
+  if (p.kind === "tabela") {
+    /* tabela estruturada: tags de Status de entrega (derivadas de planning_items) */
+    const sum = (App._planSummary && App._planSummary.get(p.id)) || new Map();
+    SE_ORDER.forEach((s) => { const n = sum.get(s); if (n) chips.appendChild(badge(s, n, SE_BADGE[s])); });
+  } else {
+    const sum = (App._summary && (App._summary.get(p.id) || (p.synthetic && App._summary.get("__all__")))) || new Map();
+    const seen = new Set();
+    getStatusOptions().forEach((s) => { const n = sum.get(s); if (n) { chips.appendChild(badge(s, n, statusClassFor(s) || "na")); seen.add(s); } });
+    for (const [k, n] of sum) if (!seen.has(k) && n) chips.appendChild(badge(k, n, "na"));
+  }
   if (!chips.childNodes.length) chips.appendChild(h("span", { class: "muted", style: { fontSize: "11px" } }, "Sem status preenchidos"));
   const editBtn = h("button", { class: "card-act", title: "Editar nome/descrição", onClick: (e) => { e.stopPropagation(); editProject(p); },
     html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' });
@@ -502,8 +514,11 @@ function projectCard(p) {
       h("span", {}, "Criado: " + (p.created_at ? fmtDate(p.created_at) : "—")),
       h("span", {}, "Atualizado: " + ((App._lastch && App._lastch.get(p.id)) ? fmtDate(App._lastch.get(p.id)) : "—"))),
     chips);
+  const kindLabel = p.synthetic ? "Planilha por abas" : (p.kind === "tabela" ? "Tabela estruturada" : "Planilha por abas");
   return h("div", { class: "card", style: { cursor: "pointer" }, onClick: () => goProject(p.id) },
-    h("div", { class: "card-head" }, h("h3", {}, p.name), actions),
+    h("div", { class: "card-head" },
+      h("div", { class: "card-titlewrap" }, h("h3", {}, p.name), h("span", { class: "card-kind" }, kindLabel)),
+      actions),
     body);
 }
 

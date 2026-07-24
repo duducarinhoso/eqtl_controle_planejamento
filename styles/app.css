@@ -558,6 +558,10 @@ table.grid th, table.grid td {
 .side-nav-item .ns-orig:hover { opacity: 1; background: #ffffff22; }
 .grid-scroll.solic { overflow: hidden; background: var(--workspace-bg); padding: 0; }
 .solic-host { height: 100%; }
+/* capa do projeto: título + tipo (planilha/tabela) empilhados */
+.card-head:has(.card-titlewrap) { align-items: flex-start; }
+.card-titlewrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card-kind { font-size: 10.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
 /* badge neutro p/ uso FORA da tela-tabela (gerenciador de Áreas no modal) */
 .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-family: var(--font-ui); font-size: 11px; font-weight: 700; background: #eef0f5; color: #475569; white-space: nowrap; }
 /* detecção de empresas */

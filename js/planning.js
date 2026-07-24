@@ -31,8 +31,6 @@ const keyStr = (it, override) => KEYCOLS.map((k) => String((override && k in ove
 
 /* Colunas: 13 de ENTRADA (editáveis) + 4 CALCULADAS (read-only, chip colorido). */
 function planningColumns(items) {
-  const statusOpts = [...new Set(items.map((i) => i.status).filter(Boolean))];
-  const statusOptions = statusOpts.length ? statusOpts : ["Em andamento", "N/A"];
   const inText = (key, header, opts = {}) => ({ key, header, render: (r) => txt(r[key]), cellText: (r) => txt(r[key]), editable: true, editType: "text", ...opts });
   const inDate = (key, header, opts = {}) => ({ key, header, render: (r) => fmtData(r[key]), cellText: (r) => fmtData(r[key]), editable: true, editType: "date", editValue: (r) => isoDate(r[key]), dateValue: (r) => isoDate(r[key]), ...opts });
   const calc = (key, header, fn) => ({ key, header, render: (r) => { const v = fn(r); return v ? h("span", { class: "dg-status " + statusKlass(v) }, v) : ""; }, cellText: (r) => String(fn(r) ?? ""), filterValue: (r) => String(fn(r) ?? ""), sortKey: key });
@@ -44,7 +42,8 @@ function planningColumns(items) {
     inText("empresa", "Empresa", { filterValue: (r) => txt(r.empresa) }),
     inText("segmento", "Segmento", { filterValue: (r) => txt(r.segmento) }),
     inDate("data_base", "Data-base"),
-    { key: "status", header: "Status", editable: true, editType: "select", editOptions: statusOptions, render: (r) => txt(r.status), cellText: (r) => txt(r.status), filterValue: (r) => txt(r.status) },
+    /* coluna "Status" (texto de origem do Excel) ocultada da grade a pedido — o
+       status é lido pelas colunas calculadas (Status de entrega/Geral/Prazo). */
     inDate("data_solicitacao", "Data solicitação"),
     inDate("prazo_recebimento", "Prazo recebimento"),
     inText("area_responsavel", "Área responsável", { filterValue: (r) => txt(r.area_responsavel) }),
@@ -70,9 +69,11 @@ function buildTopbar(project, count, activeTab, onTab) {
     onClick: () => { location.hash = "#/projetos"; },
     html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' });
   back.append(document.createTextNode("Projetos"));
-  const theme = h("button", { class: "pt-icon", title: "Alternar tema", "aria-label": "Alternar tema",
+  /* botão de tema = o "flutuante" do modelo (gradiente redondo), agora no topbar
+     em tamanho reduzido — substitui o ícone plano; some o flutuante do shell. */
+  const theme = h("button", { class: "theme-toggle pt-theme", title: "Alternar tema", "aria-label": "Alternar tema",
     onClick: () => window.toggleTheme && window.toggleTheme(),
-    html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' });
+    html: '<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>' });
   const tab = (id, label) => {
     const b = h("button", { class: "planning-tab" + (activeTab === id ? " on" : ""), onClick: () => onTab(id) }, label);
     return b;
