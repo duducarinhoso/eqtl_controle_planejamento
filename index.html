@@ -24,16 +24,16 @@
 
   <!-- Design System v2 (modelos/design-system_v2.html) — CSS verbatim do modelo -->
   <!-- ?v=N = numero de versao para cache. Ao publicar mudancas, suba o N (mesmo numero em todos abaixo + no importmap/app.js). -->
-  <link rel="stylesheet" href="styles/design-system.css?v=61" />
+  <link rel="stylesheet" href="styles/design-system.css?v=72" />
 
-  <link rel="stylesheet" href="styles/tokens.css?v=61" />
-  <link rel="stylesheet" href="styles/app.css?v=61" />
-  <link rel="stylesheet" href="styles/login.css?v=61" />
-  <link rel="stylesheet" href="styles/home.css?v=61" />
-  <link rel="stylesheet" href="styles/app-ds.css?v=61" />
-  <link rel="stylesheet" href="styles/solic.css?v=61" />
-  <link rel="stylesheet" href="styles/datagrid.css?v=61" />
-  <link rel="stylesheet" href="styles/dashboard.css?v=61" />
+  <link rel="stylesheet" href="styles/tokens.css?v=72" />
+  <link rel="stylesheet" href="styles/app.css?v=72" />
+  <link rel="stylesheet" href="styles/login.css?v=72" />
+  <link rel="stylesheet" href="styles/home.css?v=72" />
+  <link rel="stylesheet" href="styles/app-ds.css?v=72" />
+  <link rel="stylesheet" href="styles/solic.css?v=72" />
+  <link rel="stylesheet" href="styles/datagrid.css?v=72" />
+  <link rel="stylesheet" href="styles/dashboard.css?v=72" />
 </head>
 <body>
   <!-- estado de carregamento inicial -->
@@ -46,10 +46,10 @@
   <div id="app-root" hidden></div>
 
   <!-- carrega config (copie config.example.js -> config.js) -->
-  <script src="config.js?v=61"></script>
+  <script src="config.js?v=72"></script>
   <!-- Chart.js + JS do modelo (charts/gauges/sparklines/sidebar/tema) verbatim -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script defer src="js/ds.js?v=61"></script>
+  <script defer src="js/ds.js?v=72"></script>
 
   <!-- Cache-busting de TODOS os modulos JS num so lugar. O app.js importa estes
        arquivos sem ?v=; o importmap reescreve cada um para a versao carimbada.
@@ -58,28 +58,28 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/supabase.js": "./js/supabase.js?v=61",
-      "./js/auth.js": "./js/auth.js?v=61",
-      "./js/store.js": "./js/store.js?v=61",
-      "./js/grid.js": "./js/grid.js?v=61",
-      "./js/realtime.js": "./js/realtime.js?v=61",
-      "./js/excel.js": "./js/excel.js?v=61",
-      "./js/parser.js": "./js/parser.js?v=61",
-      "./js/solic.js": "./js/solic.js?v=61",
-      "./js/planning.js": "./js/planning.js?v=61",
-      "./js/table_import.js": "./js/table_import.js?v=61",
-      "./js/datagrid.js": "./js/datagrid.js?v=61",
-      "./js/listview.js": "./js/listview.js?v=61",
-      "./js/calc.js": "./js/calc.js?v=61",
-      "./js/uizoom.js": "./js/uizoom.js?v=61",
-      "./js/zoomctl.js": "./js/zoomctl.js?v=61",
-      "./js/dashboard.js": "./js/dashboard.js?v=61",
-      "./js/present.js": "./js/present.js?v=61",
-      "./js/util.js": "./js/util.js?v=61"
+      "./js/supabase.js": "./js/supabase.js?v=72",
+      "./js/auth.js": "./js/auth.js?v=72",
+      "./js/store.js": "./js/store.js?v=72",
+      "./js/grid.js": "./js/grid.js?v=72",
+      "./js/realtime.js": "./js/realtime.js?v=72",
+      "./js/excel.js": "./js/excel.js?v=72",
+      "./js/parser.js": "./js/parser.js?v=72",
+      "./js/solic.js": "./js/solic.js?v=72",
+      "./js/planning.js": "./js/planning.js?v=72",
+      "./js/table_import.js": "./js/table_import.js?v=72",
+      "./js/datagrid.js": "./js/datagrid.js?v=72",
+      "./js/listview.js": "./js/listview.js?v=72",
+      "./js/calc.js": "./js/calc.js?v=72",
+      "./js/uizoom.js": "./js/uizoom.js?v=72",
+      "./js/zoomctl.js": "./js/zoomctl.js?v=72",
+      "./js/dashboard.js": "./js/dashboard.js?v=72",
+      "./js/present.js": "./js/present.js?v=72",
+      "./js/util.js": "./js/util.js?v=72"
     }
   }
   </script>
   <!-- ponto de entrada -->
-  <script type="module" src="js/app.js?v=61"></script>
+  <script type="module" src="js/app.js?v=72"></script>
 </body>
 </html>

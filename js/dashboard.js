@@ -8,6 +8,7 @@
    (via onDrill). Agrega no cliente (calc.js). Estilos em styles/dashboard.css. */
 import { h } from "./util.js";
 import { statusEntrega, statusGeral, statusPrazo, diasAtraso } from "./calc.js";
+import { buildCaptureButton } from "./present.js";
 
 const ICON_DIR = "modelos/logomarcas_e_icones/icones_dashboard/";
 const IC = { total: ICON_DIR + "check.png", concl: ICON_DIR + "checkmark.png", pend: ICON_DIR + "pending.png" };
@@ -298,6 +299,7 @@ function renderDash(root, project, allItems, state, values, ctx, rerender) {
       h("span", { class: "t-hl-proj", title: project.name }, project.name),
       h("span", { class: "t-hl-sub" }, sub)),
     h("div", { class: "t-hl-dates" },
+      buildCaptureButton(root, project.name),
       h("div", { class: "t-hl-date" }, h("b", {}, "Data Início: "), per.inicio || "—"),
       h("div", { class: "t-hl-date" }, h("b", {}, "Data Término: "), per.termino || "andamento")));
 

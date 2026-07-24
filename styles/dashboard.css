@@ -90,9 +90,61 @@
 .dash .t-hl-sep{ color:var(--text-dim); font-weight:300; }
 .dash .t-hl-proj{ font-size:14.5px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
 .dash .t-hl-sub{ font-size:10.5px; color:var(--t-teal); font-weight:600; white-space:nowrap; flex:none; }
-.dash .t-hl-dates{ display:flex; gap:18px; flex:none; }
+.dash .t-hl-dates{ display:flex; align-items:center; gap:18px; flex:none; }
 .dash .t-hl-date{ font-size:10.5px; color:var(--text-muted); white-space:nowrap; }
 .dash .t-hl-date b{ color:var(--text); font-weight:600; }
+
+/* câmera: captura o dashboard (folha inteira) em imagem 1280×720 padronizada */
+.dash .t-cambtn{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; padding:0;
+  border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text-muted); cursor:pointer; flex:none; }
+.dash .t-cambtn svg{ width:13px; height:13px; }
+.dash .t-cambtn:hover, .dash .t-cambtn.on{ background:var(--hover); border-color:var(--t-teal); color:var(--t-teal); }
+.t-campop{ position:fixed; z-index:1200; min-width:150px; background:var(--card-bg); border:1px solid var(--border); border-radius:9px;
+  box-shadow:0 14px 34px rgba(2,10,30,.30); padding:5px; display:flex; flex-direction:column; gap:2px; }
+.t-campop-item{ text-align:left; border:0; background:none; font:inherit; font-size:12.5px; color:var(--text); padding:7px 9px; border-radius:6px; cursor:pointer; }
+.t-campop-item:hover{ background:var(--hover); }
+
+/* palco da captura em 2 CAMADAS:
+   - HOST: position:fixed fora da tela (só esconde do usuário).
+   - FRAME (.dash-capture): estático, é O QUE se fotografa.
+   Fotografar um elemento position:fixed dava IMAGEM BRANCA (o html-to-image
+   desenhava o conteúdo no offset -100000px, fora do quadro). O frame estático
+   renderiza a partir do 0,0. O frame tem o FUNDO do workspace + padding → a
+   folha branca fica sobre o verde com respiro lateral (igual à tela).
+   Widescreen 1920; altura NATURAL (só o que o conteúdo pede, sem esticar). */
+.dash-capture-host{ position:fixed; left:-100000px; top:0; zoom:1 !important; pointer-events:none; }
+/* frame widescreen 1920 × altura 1040. O dashboard PREENCHE o frame (flex:1) e
+   os elementos se distribuem na altura — sem espaço morto em cima/embaixo. Se os
+   dados forem muitos, o frame cresce além do mínimo sem cortar. */
+.dash-capture{ display:flex; flex-direction:column; width:1920px; min-height:1040px;
+  padding:28px 30px; box-sizing:border-box; background:var(--workspace-bg, #f4f7f6); }
+.dash-capture .dash{ flex:1 1 auto; min-height:0; height:auto; gap:14px; }
+/* legenda dos blocos NÃO pode quebrar no palco: ela fica no limite exato de 1
+   linha e o html-to-image (metragem de fonte diferente) empurrava p/ 2 linhas. */
+.dash-capture .t-legend{ flex-wrap:nowrap !important; }
+.dash-capture .planning-body, .dash-capture .t-cards{ overflow:visible !important; min-height:0; }
+.dash-capture .t-cardbody{ overflow:visible !important; max-height:none; min-height:0; }
+.dash-capture .t-head{ flex:none; }
+.dash-capture .t-headmain{ flex-wrap:nowrap; }
+/* html2canvas NÃO respeita -webkit-line-clamp (corta o rótulo pra 1 linha). No
+   palco não há restrição de espaço → mostra o rótulo INTEIRO (wrap normal) e a
+   linha cresce pra caber; nada de "…" nem corte. Vale p/ todos os rótulos.
+   !important porque a regra original .dash .t-plab tem a MESMA especificidade e
+   vem depois no arquivo (venceria o empate). */
+.dash-capture .t-plab{ -webkit-line-clamp:unset !important; display:block !important; overflow:visible !important; white-space:normal !important; }
+.dash-capture .t-arlab, .dash-capture .t-malab, .dash-capture .t-sglab, .dash-capture .t-flabel{ overflow:visible !important; max-width:none !important; white-space:normal !important; text-overflow:clip !important; }
+.dash-capture .t-block{ overflow:visible; }
+.dash-capture .t-pctrow, .dash-capture .t-prrow, .dash-capture .t-arrow{ min-height:0; }
+
+/* modal de progresso da captura (trava a interação) */
+.cap-scrim{ z-index:1300; }
+.cap-modal{ width:340px; max-width:calc(100vw - 32px); text-align:center; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.cap-modal .cap-spin{ margin:2px 0 2px; }
+.cap-modal .cap-spin.ok{ border-color:var(--t-ok, #6bcfa0); border-top-color:var(--t-ok, #6bcfa0); animation:none; position:relative; }
+.cap-modal .cap-spin.ok::after{ content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:var(--t-ok-ink, #277d55); font-size:16px; font-weight:800; }
+.cap-modal .cap-title{ margin:0; font-size:16px; font-weight:800; }
+.cap-modal .cap-status{ margin:0; font-size:12.5px; min-height:16px; }
+.cap-modal .cap-foot{ display:flex; gap:8px; }
 
 /* larguras por flex-basis: Concluídos e Pendentes têm a MESMA base → mesma largura */
 .dash .t-headmain{ display:flex; align-items:stretch; gap:12px; padding:8px 14px 10px; }
