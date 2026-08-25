@@ -149,7 +149,7 @@ export async function deleteProject(id) {
 export const PLANNING_FIELDS = [
   "item_num", "referencia", "grupo", "descricao", "empresa", "segmento",
   "data_base", "status", "data_solicitacao", "prazo_recebimento",
-  "area_responsavel", "responsavel", "entrega_efetiva",
+  "area_responsavel", "responsavel", "entrega_efetiva", "observacoes",
 ];
 const PLANNING_KEY = ["item_num", "referencia", "grupo", "empresa"];
 

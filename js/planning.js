@@ -38,6 +38,7 @@ const DIFF_FIELDS = [
   { key: "area_responsavel", label: "Área responsável" },
   { key: "responsavel", label: "Responsável" },
   { key: "entrega_efetiva", label: "Entrega efetiva", date: true },
+  { key: "observacoes", label: "Observações" },
 ];
 const normField = (v, isDate) => { const s = v == null ? "" : String(v); return isDate ? s.slice(0, 10) : s.trim(); };
 const fmtDateShort = (s) => { if (!s) return ""; const [y, m, d] = s.split("-"); return (y && m && d) ? `${d}/${m}/${y}` : s; };
@@ -54,15 +55,21 @@ function diffFieldsFor(existing, novo) {
 /* Compara a base atual (existing) com as linhas recem-parseadas (parsedRows),
    pela chave composta. Não decide nada sozinho — devolve as 4 categorias pro
    modal (showReimportDiffModal) exibir e o usuário escolher o que aplicar. */
-function computeReimportDiff(existingItems, parsedRows) {
+function computeReimportDiff(existingItems, parsedRows, presentFields = null) {
   const byKey = new Map(existingItems.map((it) => [keyStr(it), it]));
   const seenKeys = new Set();
   const novas = [], alteradas = [], semMudanca = [];
+  /* Colunas do modelo que NAO vieram no arquivo (planilha antiga, ex.: sem
+     "Observações"): preserva o valor que já está na base — senão o upsert
+     grava null (upsertPlanningItems escreve todos os PLANNING_FIELDS) e a
+     coluna aparecia como "alterada → (vazio)" só por faltar no arquivo. */
+  const ausentes = presentFields ? DIFF_FIELDS.filter((f) => !presentFields.includes(f.key)) : [];
   for (const row of parsedRows) {
     const k = keyStr(row);
     seenKeys.add(k);
     const existing = byKey.get(k);
     if (!existing) { novas.push(row); continue; }
+    for (const f of ausentes) row[f.key] = existing[f.key] ?? null;
     const changes = diffFieldsFor(existing, row);
     if (changes.length) alteradas.push({ existing, novo: row, changes });
     else semMudanca.push(row);
@@ -94,6 +101,7 @@ function planningColumns(items) {
     inText("area_responsavel", "Área responsável", { filterValue: (r) => txt(r.area_responsavel) }),
     inText("responsavel", "Responsável", { filterValue: (r) => txt(r.responsavel) }),
     inDate("entrega_efetiva", "Entrega efetiva"),
+    inText("observacoes", "Observações"),
     calc("c_entrega", "Status de entrega", statusEntrega),
     calc("c_geral", "Status Geral", statusGeral),
     calc("c_prazo", "Status Prazo", statusPrazo),
@@ -332,7 +340,7 @@ function importFlow(project, done) {
     let existing = [];
     try { existing = await store.listPlanningItems(project); }
     catch (e) { return toast("Erro ao comparar com a base atual: " + (e.message || e), "err"); }
-    const diff = computeReimportDiff(existing, parsed.rows);
+    const diff = computeReimportDiff(existing, parsed.rows, parsed.fields);
     if (!diff.novas.length && !diff.alteradas.length) {
       toast(`Nada para aplicar — ${diff.semMudanca.length} sem mudança, ${diff.foraDaPlanilha.length} fora da planilha.`);
       return;

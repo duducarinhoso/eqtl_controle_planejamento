@@ -31,6 +31,9 @@ const HEADER_MAP = {
   "area responsavel": "area_responsavel",
   "responsavel": "responsavel",
   "entrega efetiva": "entrega_efetiva",
+  "observacoes": "observacoes",
+  "observacao": "observacoes",
+  "obs": "observacoes",
 };
 const DATE_FIELDS = new Set(["data_base", "prazo_recebimento", "entrega_efetiva"]); // -> YYYY-MM-DD
 const TS_FIELDS = new Set(["data_solicitacao"]);                                     // -> ISO timestamp
@@ -117,7 +120,7 @@ export async function parseTableXlsx(file) {
       out.push(obj);
     }
   }
-  return { sheetName: name, rows: out };
+  return { sheetName: name, rows: out, fields: Object.keys(colMap) };
 }
 
 /* Cabeçalho legível (com acentos) + regra de preenchimento, na mesma ordem de
@@ -136,6 +139,7 @@ const TEMPLATE_COLS = [
   { field: "area_responsavel", header: "Área responsável", rule: "Texto livre." },
   { field: "responsavel", header: "Responsável", rule: "Texto livre." },
   { field: "entrega_efetiva", header: "Entrega efetiva", rule: "Data (dd/mm/aaaa). Deixe em branco enquanto o item estiver pendente." },
+  { field: "observacoes", header: "Observações", rule: "Texto livre. Anotações sobre o item (pendência, combinado, motivo do atraso). Editável direto na Base Gerencial." },
 ];
 const TEAL = "FF12A0A8";
 
