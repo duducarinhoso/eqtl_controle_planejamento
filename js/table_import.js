@@ -114,9 +114,13 @@ export async function parseTableXlsx(file) {
       obj[field] = val;
       if (val != null && val !== "") hasAny = true;
     }
-    // linha valida precisa do item_num (o "#")
-    if (hasAny && obj.item_num != null && String(obj.item_num).trim() !== "") {
-      obj.item_num = String(obj.item_num).trim();
+    // item_num: o "#" e o CABECALHO da coluna, nao o valor. Alguns arquivos trazem
+    // "#1916" na celula; normalizamos removendo o "#" (e espacos) pra nao criar
+    // chave divergente ("#1916" != "1916") e duplicar no reimport.
+    const inum = obj.item_num == null ? "" : String(obj.item_num).replace(/^#\s*/, "").trim();
+    // linha valida precisa do item_num (a coluna "#")
+    if (hasAny && inum !== "") {
+      obj.item_num = inum;
       out.push(obj);
     }
   }
