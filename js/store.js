@@ -163,10 +163,18 @@ export async function planningAvailable() {
 
 export async function listPlanningItems(project) {
   const pid = project?.id;
-  const { data, error } = await supabase.from("planning_items")
-    .select("*").eq("project_id", pid).order("id", { ascending: true });
-  if (error) throw error;
-  return data || [];
+  // pagina para nao truncar projetos grandes (limite default do PostgREST = 1000)
+  const out = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase.from("planning_items")
+      .select("*").eq("project_id", pid).order("id", { ascending: true })
+      .range(from, from + page - 1);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < page) break;
+  }
+  return out;
 }
 
 /* Insere/atualiza linhas (carga e reimport). rows = objetos com PLANNING_FIELDS.
@@ -232,15 +240,22 @@ export async function loadProjectsStatusSummary() {
 export async function loadPlanningStatusSummary() {
   const out = new Map();
   if (!(await planningAvailable())) return out;
-  const { data, error } = await supabase.from("planning_items")
-    .select("project_id,status,prazo_recebimento,entrega_efetiva");
-  if (error || !data) return out;
   const hoje = new Date();
-  for (const r of data) {
-    const lab = statusEntrega(r, hoje);
-    if (!out.has(r.project_id)) out.set(r.project_id, new Map());
-    const m = out.get(r.project_id);
-    m.set(lab, (m.get(lab) || 0) + 1);
+  // pagina para nao truncar (limite default do PostgREST = 1000) — sao TODOS os
+  // projetos tabela somados, entao passa fácil de 1000 linhas.
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase.from("planning_items")
+      .select("project_id,status,prazo_recebimento,entrega_efetiva")
+      .order("id", { ascending: true }).range(from, from + page - 1);
+    if (error || !data) return out;
+    for (const r of data) {
+      const lab = statusEntrega(r, hoje);
+      if (!out.has(r.project_id)) out.set(r.project_id, new Map());
+      const m = out.get(r.project_id);
+      m.set(lab, (m.get(lab) || 0) + 1);
+    }
+    if (data.length < page) break;
   }
   return out;
 }
