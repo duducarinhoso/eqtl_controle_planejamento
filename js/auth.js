@@ -19,7 +19,7 @@ export function renderAuth(root, startMode = "login") {
         <aside class="showcase" aria-label="Identificação do portal">
           <div class="showcase-copy">
             <img class="showcase-logo" src="app_planejamento_logo.png" alt="Grupo Equatorial" />
-            <h2>Portal da Contabilidade</h2>
+            <h2>Controle de Auditoria Externa</h2>
             <p>Executiva Contabilidade IV</p>
           </div>
         </aside>
