@@ -11,7 +11,7 @@ tipo: inventario
 
 | Tela / Visão | Onde no código | Status |
 |---|---|---|
-| **Login / Signup / Esqueci / Reset** | `js/auth.js` (`renderAuth`) + `styles/login.css` | ✅ concluída — 4 fluxos; reset por `type=recovery` na URL; toggle de senha; tradução de erros |
+| **Login / Signup / Esqueci / Reset** | `js/auth.js` (`renderAuth`) + `styles/login.css` | ✅ concluída — 4 fluxos; reset por `type=recovery` na URL; toggle de senha; tradução de erros; título "Controle de Auditoria Externa" (2026-09-21) |
 | **Troca de senha no 1º acesso** | `app.js` (`forceChangePassword`) — `must_change_password` | ✅ concluída |
 | **Home / Seletor de módulos** | `app.js` (`showHome`/`buildHome`) + `styles/home.css` | 🔨 entregue — painel **Auditoria** ativo (→ `#/projetos`) + **Cronograma** inativo (`aria-disabled`, "em construção") |
 | **Projetos (landing)** | `app.js` (`showProjects`/`buildLanding`/`projectCard`) | ✅ concluída — grade de cards, busca, criar/editar/excluir, chips de status por contagem |
